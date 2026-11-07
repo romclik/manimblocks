@@ -1,0 +1,34 @@
+name: Release
+# Runs when you PUBLISH a release on GitHub (Releases -> Draft a new release -> Publish).
+# It builds the Windows installer and attaches it to that same release.
+on:
+  release:
+    types: [published]
+permissions:
+  contents: write
+jobs:
+  windows-installer:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Check release tag matches package.json version
+        shell: bash
+        run: |
+          PKG="v$(node -p "require('./package.json').version")"
+          if [ "$PKG" != "${{ github.event.release.tag_name }}" ]; then
+            echo "::error::Release tag is ${{ github.event.release.tag_name }} but package.json version gives $PKG. Change the version in package.json (or the tag) so they match, then publish again."
+            exit 1
+          fi
+      - run: npm ci
+      - run: npm run check
+      - name: Build installer and upload to the release
+        run: npx electron-builder --win --publish always
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
