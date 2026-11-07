@@ -1,0 +1,83 @@
+{
+  "name": "manimblocks",
+  "productName": "ManimBlocks",
+  "version": "0.1.0",
+  "description": "Visual block editor that generates Manim animations",
+  "author": "romclik",
+  "license": "MIT",
+  "private": true,
+  "type": "module",
+  "main": "electron/main.cjs",
+  "engines": {
+    "node": ">=20"
+  },
+  "scripts": {
+    "dev": "concurrently -k -n vite,app \"vite\" \"wait-on tcp:127.0.0.1:5173 && cross-env VITE_DEV_SERVER_URL=http://127.0.0.1:5173 electron .\"",
+    "build": "vite build",
+    "start": "npm run build && electron .",
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run",
+    "check": "npm run typecheck && npm run test && npm run build",
+    "dist": "npm run build && electron-builder --win"
+  },
+  "build": {
+    "appId": "io.github.romclik.manimblocks",
+    "productName": "ManimBlocks",
+    "directories": {
+      "output": "release"
+    },
+    "files": [
+      "dist/**/*",
+      "electron/**/*",
+      "package.json"
+    ],
+    "win": {
+      "target": [
+        {
+          "target": "nsis",
+          "arch": [
+            "x64"
+          ]
+        }
+      ]
+    },
+    "nsis": {
+      "oneClick": false,
+      "allowToChangeInstallationDirectory": true,
+      "perMachine": false,
+      "allowElevation": true,
+      "createDesktopShortcut": true,
+      "createStartMenuShortcut": true,
+      "artifactName": "ManimBlocks-Setup-${version}.exe",
+      "deleteAppDataOnUninstall": false
+    },
+    "publish": [
+      {
+        "provider": "github",
+        "owner": "romclik",
+        "repo": "manimblocks",
+        "releaseType": "release"
+      }
+    ]
+  },
+  "devDependencies": {
+    "@types/node": "^26.6.6",
+    "@types/prismjs": "^1.26.6",
+    "@types/react": "^19.3.0",
+    "@types/react-dom": "^19.3.0",
+    "@vitejs/plugin-react": "^6.2.1",
+    "blockly": "^13.4.0",
+    "concurrently": "^10.0.7",
+    "cross-env": "^10.1.0",
+    "electron": "^45.2.3",
+    "electron-builder": "^26.18.0",
+    "jsdom": "^31.0.0",
+    "prismjs": "^1.30.0",
+    "react": "^19.3.1",
+    "react-dom": "^19.3.1",
+    "typescript": "^7.0.2",
+    "vite": "^8.3.6",
+    "vitest": "^5.1.0",
+    "wait-on": "^9.5.1"
+  }
+}
