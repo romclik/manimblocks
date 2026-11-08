@@ -27,6 +27,7 @@ jobs:
             exit 1
           fi
       - run: npm ci
+      - run: node scripts/get-uv.mjs --strict
       - run: npm run check
       - name: Build installer and upload to the release
         run: npx electron-builder --win --publish always
