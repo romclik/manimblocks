@@ -3,6 +3,7 @@ import * as Blockly from 'blockly';
 import { BlocklyEditor } from './components/BlocklyEditor';
 import { CodePanel, type Tab } from './components/CodePanel';
 import { SetupDialog } from './components/SetupDialog';
+import { VideoPreview } from './components/VideoPreview';
 import { generate, type WorkspaceState } from './codegen/generate';
 import { copyText, saveTextFile } from './lib/files';
 
@@ -20,6 +21,7 @@ export default function App() {
   const [log, setLog] = useState<string[]>([]);
   const [renderError, setRenderError] = useState('');
   const [hasVideo, setHasVideo] = useState(false);
+  const [videoUrl, setVideoUrl] = useState<string | null>(null);
   const result = useMemo(() => generate(state), [state]);
   const blocked = result.errorCount > 0;
 
@@ -53,7 +55,7 @@ export default function App() {
     setRendering(true); setLog([]); setRenderError(''); setInfo('Starting...'); setTab('log');
     const r = await api.startRender({ code: result.code, quality });
     setRendering(false); setInfo('');
-    if (r.ok) { setHasVideo(true); say('Render finished. Use Open video or Export MP4.'); }
+    if (r.ok) { setHasVideo(true); setVideoUrl(r.videoUrl); say('Render finished.'); }
     else if (r.canceled) say('Render canceled.');
     else { setRenderError(r.error ?? 'Render failed.'); say('Render failed. See the Render log.'); }
   };
@@ -95,8 +97,8 @@ export default function App() {
         <BlocklyEditor onReady={onReady} onChange={setState} />
         <aside className="preview">
           <h3>Preview</h3>
-          <p>The in-app video player is not built yet (stage 5). After a render, use <b>Open video</b> to watch it in your video player, or <b>Export MP4</b> to save it.</p>
-          <p className="dim">Tip: drag a <b>when animation starts</b> block in, then add blocks under it.</p>
+          <VideoPreview url={videoUrl} />
+          <p className="dim small">Tip: drag a <b>when animation starts</b> block in, then add blocks under it. Preview quality is the render quality you pick in the toolbar.</p>
         </aside>
       </main>
       <CodePanel result={result} onSelectBlock={selectBlock} tab={tab} onTab={setTab} log={log} renderError={renderError} />

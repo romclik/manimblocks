@@ -2,7 +2,7 @@
 
 Build [Manim](https://www.manim.community/) animations by snapping blocks together (like Scratch). ManimBlocks turns your blocks into real Manim Community Edition Python code.
 
-## Current status (version 0.1.0, stages 1-4)
+## Current status (version 0.1.0, stages 1-5)
 
 | Feature | Status |
 |---|---|
@@ -15,7 +15,7 @@ Build [Manim](https://www.manim.community/) animations by snapping blocks togeth
 | Auto-install of Python 3.12 + Manim + FFmpeg (private, via `uv`) | Built; tested on Linux, Windows test runs in the **E2E** workflow |
 | Render to MP4 with progress, cancel, safety check, error messages | Built; same testing status |
 | Open / show / export the rendered MP4 | Built (untested on Windows) |
-| In-app video preview | **Not built yet** (stage 5) |
+| In-app video preview: play, pause, restart, seek, time, fullscreen, auto-refresh after render | Built; seeking server unit-tested, the player itself untested on Windows |
 | LaTeX for MathTex | **Not automatic**: install MiKTeX yourself (the app tells you) |
 | Save/open projects, autosave, recovery | **Not built yet** (stage 6) |
 | Auto-update from GitHub Releases | **Not built yet** (stage 9) |

@@ -1,10 +1,14 @@
 // Electron main process (plain JavaScript on purpose: no extra build step to break).
-const { app, BrowserWindow, ipcMain, dialog, shell } = require('electron');
+const { app, BrowserWindow, ipcMain, dialog, shell, protocol } = require('electron');
 const path = require('path');
 const fs = require('fs');
 const settings = require('./core/settings.cjs');
 const env = require('./core/env.cjs');
 const { render } = require('./core/render.cjs');
+const { serveFile } = require('./core/media.cjs');
+
+// mbvideo://local/... serves the most recent render to the preview player (never a page-supplied path).
+protocol.registerSchemesAsPrivileged([{ scheme: 'mbvideo', privileges: { standard: true, secure: true, stream: true, supportFetchAPI: true } }]);
 
 const DEV_URL = process.env.VITE_DEV_SERVER_URL;
 const exe = process.platform === 'win32' ? 'uv.exe' : 'uv';
@@ -18,7 +22,7 @@ let state = settings.load(settingsFile);
 if (state.configured) app.setPath('sessionData', path.join(state.locations.root, 'electron-session'));
 
 let win = null;
-let envJob = null, renderJob = null, lastVideo = null;
+let envJob = null, renderJob = null, lastVideo = null, videoVersion = 0;
 const trusted = (e) => win && e.sender === win.webContents;
 const send = (ch, payload) => { if (win && !win.isDestroyed()) win.webContents.send(ch, payload); };
 
@@ -85,8 +89,9 @@ handle('render:start', async (opts) => {
   renderJob = new AbortController();
   try {
     const r = await render({ code: opts && opts.code, quality: opts && opts.quality, loc: state.locations, signal: renderJob.signal, onProgress: (p) => send('render:progress', p), onLog: (l) => send('render:log', l) });
-    if (r.ok) lastVideo = r.videoPath;
-    return r;
+    if (!r.ok) return r;
+    lastVideo = r.videoPath;
+    return { ...r, videoUrl: `mbvideo://local/latest.mp4?v=${++videoVersion}` };
   } finally { renderJob = null; }
 });
 handle('render:cancel', async () => { if (renderJob) renderJob.abort(); return { ok: true }; });
@@ -103,6 +108,7 @@ handle('video:export', async () => {
 });
 
 app.whenReady().then(() => {
+  protocol.handle('mbvideo', (request) => (lastVideo ? serveFile(lastVideo, request) : new Response('No video yet', { status: 404 })));
   createWindow();
   app.on('activate', () => { if (BrowserWindow.getAllWindows().length === 0) createWindow(); });
 });

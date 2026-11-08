@@ -6,7 +6,7 @@ interface SettingsInfo { configured: boolean; locations: Locations | null; defau
 interface EnvProgress { phase: string; percent: number; message: string }
 interface RenderProgress { animation?: number; percent?: number; label?: string; message?: string }
 type TaskResult = { ok: true } | { ok: false; canceled?: boolean; error?: string };
-type RenderResult = { ok: true; videoPath: string } | { ok: false; canceled?: boolean; error?: string };
+type RenderResult = { ok: true; videoPath: string; videoUrl: string } | { ok: false; canceled?: boolean; error?: string };
 interface ManimApi {
   saveTextFile(opts: { defaultName: string; content: string; filters?: { name: string; extensions: string[] }[] }): Promise<SaveResult>;
   getSettings(): Promise<SettingsInfo>;

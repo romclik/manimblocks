@@ -11,7 +11,7 @@ const csp: Plugin = {
     handler: (html) =>
       html.replace(
         '</head>',
-        `<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; font-src 'self' data:; media-src 'self' blob:" /></head>`,
+        `<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; font-src 'self' data:; media-src 'self' blob: mbvideo:" /></head>`,
       ),
   },
 };
