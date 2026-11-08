@@ -2,7 +2,7 @@
 
 Build [Manim](https://www.manim.community/) animations by snapping blocks together (like Scratch). ManimBlocks turns your blocks into real Manim Community Edition Python code.
 
-## Current status (version 0.1.0, stages 1-3)
+## Current status (version 0.1.0, stages 1-4)
 
 | Feature | Status |
 |---|---|
@@ -11,8 +11,12 @@ Build [Manim](https://www.manim.community/) animations by snapping blocks togeth
 | 8 block categories (objects, animations, properties, timing, camera, logic, variables) | Built |
 | Python code generation + live code panel, Copy, Export .py | Built and unit-tested |
 | Problems panel (click a problem to jump to the block) | Built |
-| Render to MP4, video preview | **Not built yet** (stages 4-5) |
-| Auto-install of Python/Manim/FFmpeg, drive/location setup screen | **Not built yet** (stage 4/8) |
+| Setup screen: choose folders for Python env, cache, temp; disk-space checks | Built |
+| Auto-install of Python 3.12 + Manim + FFmpeg (private, via `uv`) | Built; tested on Linux, Windows test runs in the **E2E** workflow |
+| Render to MP4 with progress, cancel, safety check, error messages | Built; same testing status |
+| Open / show / export the rendered MP4 | Built (untested on Windows) |
+| In-app video preview | **Not built yet** (stage 5) |
+| LaTeX for MathTex | **Not automatic**: install MiKTeX yourself (the app tells you) |
 | Save/open projects, autosave, recovery | **Not built yet** (stage 6) |
 | Auto-update from GitHub Releases | **Not built yet** (stage 9) |
 | Windows installer with a choosable install folder | Configured and built by GitHub Actions; **untested** |
@@ -20,9 +24,9 @@ Build [Manim](https://www.manim.community/) animations by snapping blocks togeth
 ### Honest status
 - The code generator is tested: the unit tests compile the generated Python, and a program using every block except MathTex was rendered with real Manim 0.22.1.
 - The Electron window, the Blockly UI and the installer were **not run on a real Windows PC** while writing this. Expect to find small bugs on first launch; report them.
-- **MathTex needs a LaTeX installation** (e.g. MiKTeX) at render time. Stage 4 will handle this.
+- **MathTex needs a LaTeX installation** (e.g. MiKTeX). Automatic LaTeX setup is not built yet; the app shows a clear message instead.
 - Releases are not signed, so Windows SmartScreen will show "unknown publisher" until a code-signing certificate is added.
-- Do not announce a release to other people until stage 4 (rendering) exists. Right now the app cannot make videos.
+- The **E2E** workflow (Actions tab) installs everything and renders a real video on a Windows machine. If it is green, the Windows install-and-render path works.
 
 ## Try it (developers)
 1. Install [Node.js LTS](https://nodejs.org/) (one installer, accept the defaults).
@@ -48,7 +52,7 @@ Other commands: `npm test` (tests), `npm run check` (type-check + tests + build,
 For the next version: raise `version` in `package.json`, commit, then repeat step 2 with the new tag.
 
 ## Installer
-The installer is an NSIS wizard with an **Choose install location** page, so users can pick any drive (for example `D:\Programs\ManimBlocks`). It installs per-user and does not require C:\Program Files. A first-launch screen for the Python/cache/temp folders arrives with stage 4.
+The installer is an NSIS wizard with an **Choose install location** page, so users can pick any drive (for example `D:\Programs\ManimBlocks`). It installs per-user and does not require C:\Program Files. On first launch a setup screen lets users choose where Python/Manim, the download cache and temporary render files go (for example on another drive), checks free space, then installs. By default the data folder is `data` inside the install folder. Only a tiny settings file stays in the Windows user profile.
 
 ## Project layout
 - `electron/` desktop shell (main process and secure preload bridge)
@@ -62,3 +66,6 @@ Users never type Python. Numbers are parsed by a small validator, colors come fr
 
 ## License
 MIT, see `LICENSE`.
+
+## How rendering works
+The app ships a small tool called [`uv`](https://github.com/astral-sh/uv) (downloaded by `npm install` with a pinned checksum, bundled into the installer). On first launch it uses `uv` to download Python 3.12 and install Manim 0.22.1 plus FFmpeg into the folders you chose. Renders run in a separate process, so the window stays responsive, and can be canceled. Before anything runs, a safety check (`electron/core/validate_scene.py`) verifies the generated program contains only the Manim operations ManimBlocks can produce.

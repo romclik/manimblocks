@@ -4,31 +4,10 @@ import { mkdtempSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import * as Blockly from 'blockly';
-import { generate, SUPPORTED_BLOCK_TYPES, type BlockState, type WorkspaceState } from './generate';
+import { generate, SUPPORTED_BLOCK_TYPES, type WorkspaceState } from './generate';
+import { B, seq, prog, ref, VARS, SAMPLE } from './fixtures';
 import { BLOCK_DEFINITIONS, registerBlocks } from '../blocks/definitions';
 import { TOOLBOX } from '../blocks/toolbox';
-
-const B = (type: string, fields: Record<string, unknown> = {}, inputs: BlockState['inputs'] = {}): BlockState => ({ type, fields, inputs });
-const seq = (...bs: BlockState[]): BlockState => { for (let i = 0; i < bs.length - 1; i++) bs[i].next = { block: bs[i + 1] }; return bs[0]; };
-const prog = (first: BlockState, vars: { id: string; name: string }[] = []): WorkspaceState =>
-  ({ variables: vars, blocks: { blocks: [{ type: 'scene_start', next: { block: first } }] } });
-const VARS = [{ id: 'c1', name: 'circle' }, { id: 's1', name: 'square' }, { id: 'n1', name: 'count' }];
-const ref = (id: string) => ({ id });
-
-const SAMPLE = prog(seq(
-  B('time_fps', { FPS: '30' }),
-  B('obj_circle', { R: '1', COLOR: 'BLUE', VAR: ref('c1') }),
-  B('obj_square', { SIDE: '2', COLOR: 'RED', VAR: ref('s1') }),
-  B('var_set', { VAR: ref('n1'), VALUE: '0' }),
-  B('anim_create', { OBJ: ref('c1') }),
-  B('logic_repeat', { N: '3' }, { DO: { block: seq(
-    B('anim_shift', { OBJ: ref('c1'), X: '0.5', Y: '-1' }),
-    B('var_change', { VAR: ref('n1'), VALUE: '1' }),
-  ) } }),
-  B('logic_foreach', { LOOPVAR: 'i', FROM: '1', TO: '3' }, { DO: { block: B('anim_scale', { OBJ: ref('c1'), FACTOR: 'i * 0.5 + count' }) } }),
-  B('logic_if_else', { A: 'count', OP: '>=', B: '2' }, { DO: { block: B('prop_color', { OBJ: ref('c1'), COLOR: 'GOLD' }) }, ELSE: { block: B('time_wait', { T: '1' }) } }),
-  B('anim_transform', { OBJ: ref('c1'), TARGET: ref('s1') }),
-), VARS);
 
 function pythonCompiles(code: string): boolean | null {
   const dir = mkdtempSync(join(tmpdir(), 'mb-'));

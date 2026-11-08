@@ -21,5 +21,5 @@ export default defineConfig({
   plugins: [react(), csp],
   server: { host: '127.0.0.1', port: 5173, strictPort: true },
   build: { outDir: 'dist', chunkSizeWarningLimit: 3000 },
-  test: { environment: 'jsdom', include: ['src/**/*.test.ts'] },
+  test: { environment: 'jsdom', include: ['src/**/*.test.ts', 'electron/**/*.test.ts'], testTimeout: 30000 },
 });
