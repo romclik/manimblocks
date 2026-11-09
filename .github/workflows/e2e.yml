@@ -1,17 +1,35 @@
-     name: E2E (real install and render)
-     on:
-       push:
-       workflow_dispatch:
-     jobs:
-       e2e-windows:
-         runs-on: windows-latest
-         timeout-minutes: 40
-         steps:
-           - uses: actions/checkout@v4
-           - uses: actions/setup-node@v4
-             with:
-               node-version: 22
-               cache: npm
-           - run: npm ci
-           - run: node scripts/get-uv.mjs --strict
-           - run: npm run test:e2e
+name: E2E (real install and render)
+# Installs Python + Manim + FFmpeg exactly like the app does, then renders real videos, on Windows.
+# Slower than CI (several minutes). Runs on every push and can be started by hand from the Actions tab.
+on:
+  push:
+  workflow_dispatch:
+jobs:
+  e2e-windows:
+    runs-on: windows-latest
+    timeout-minutes: 40
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - run: node scripts/get-uv.mjs --strict
+      - run: npm run test:e2e
+  # Also installs the private LaTeX (TinyTeX) and renders a MathTex formula. Kept separate so a LaTeX problem
+  # never hides whether the basic install-and-render path works.
+  e2e-latex-windows:
+    runs-on: windows-latest
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - run: node scripts/get-uv.mjs --strict
+      - run: npm run test:e2e
+        env:
+          MB_E2E_LATEX: '1'
