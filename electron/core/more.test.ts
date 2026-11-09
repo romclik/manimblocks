@@ -180,7 +180,7 @@ describe('LaTeX install: tlmgr remedies (simulated Windows run)', () => {
   const machine = (bin: string, scenario: 'ok' | 'needs-self-update' | 'needs-exe' | 'never' | 'needs-formats' | 'needs-sty') => {
     const calls: string[] = [];
     const tools = () => { for (const t of ['dvisvgm.exe']) writeFileSync(join(bin, t), ''); };
-    const runFn = async (cmd: string, args: string[], o: { onLine?: (l: string) => void } = {}) => {
+    const runFn = async (cmd: string, args: string[], o: { onLine?: (l: string) => void; cwd?: string } = {}) => {
       const line = `${cmd} ${args.join(' ')}`; calls.push(line);
       const say = (t: string) => o.onLine?.(t);
       if (/tar/i.test(cmd)) { mkdirSync(bin, { recursive: true }); for (const t of ['latex.exe', 'tlmgr.bat']) writeFileSync(join(bin, t), ''); return { code: 0 }; }
@@ -193,7 +193,7 @@ describe('LaTeX install: tlmgr remedies (simulated Windows run)', () => {
       if (/dvisvgm\.exe|latex\.exe/.test(cmd) && args[0] === '--version') return { code: 0 };
       if (args[0] === '-c' && /tex_template/.test(args[1])) { for (const l of ['(warnings are printed first)', ...latex.MANIM_LIKE_DOC.split('\n')]) say(l); return { code: 0 }; }
       if (/latex\.exe$/.test(cmd) && args.some((a) => /check\.tex$/.test(a))) {
-        const dir = args.find((a) => a.startsWith('-output-directory='))!.slice(18);
+        const dir = o.cwd!; if (args.some((a) => /[\\/]/.test(a) && /check\.tex/.test(a))) return { code: 1 }; // a path reaching TeX would be a bug
         const formatsBuilt = calls.some((c) => /fmtutil/.test(c)), styInstalled = calls.some((c) => /install amsfonts/.test(c));
         if (scenario === 'needs-formats' && !formatsBuilt) return { code: 1 }; // dies before writing any log
         if (scenario === 'needs-sty' && !styInstalled) { writeFileSync(join(dir, 'check.log'), "! LaTeX Error: File `amssymb.sty' not found.\n"); say("! LaTeX Error: File `amssymb.sty' not found."); return { code: 1 }; }
@@ -235,6 +235,11 @@ describe('LaTeX install: tlmgr remedies (simulated Windows run)', () => {
     await go(loc, m.runFn);
     expect(m.calls.some((c) => /install amsfonts/.test(c))).toBe(true);
     expect(existsSync(join(latex.latexDir(loc), 'ready.json'))).toBe(true);
+  });
+  it('resolves 8.3 short paths and never hands TeX a path', () => {
+    const d = tmp();
+    expect(latex.longPath(d)).toBe(require('node:fs').realpathSync.native(d));
+    expect(latex.longPath(join(d, 'does-not-exist'))).toBe(join(d, 'does-not-exist'));
   });
   it('the diagnostic document mirrors the preamble Manim uses', () => {
     for (const pkg of ['standalone', 'babel', 'amsmath', 'amssymb']) expect(latex.MANIM_LIKE_DOC).toContain(pkg);

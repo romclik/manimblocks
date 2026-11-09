@@ -4,6 +4,7 @@ const path = require('path');
 const { run } = require('./proc.cjs');
 const env = require('./env.cjs');
 const latex = require('./latex.cjs');
+const { longPath } = latex;
 
 const QUALITY = { l: { flag: '-ql', need: 0.5e9 }, m: { flag: '-qm', need: 1e9 }, h: { flag: '-qh', need: 3e9 } };
 const ANIM_RE = /Animation\s+(\d+)\s*:\s*(.*?)\s*:\s+(\d+)%/;
@@ -63,7 +64,7 @@ async function render({ code, quality, fps = 0, loc, onProgress = () => {}, onLo
   if (!Number.isInteger(fps) || fps < 0 || fps > 120) return fail('Invalid frame rate.');
 
   pruneRenders(loc.temp, 3);
-  const dir = fs.mkdtempSync(path.join(loc.temp, 'render-'));
+  const dir = longPath(fs.mkdtempSync(path.join(loc.temp, 'render-'))); // long path: TeX chokes on "~" in 8.3 short names
   const scene = path.join(dir, 'scene.py');
   fs.writeFileSync(scene, code, 'utf8');
   const L = env.layout(loc), e = env.toolEnv(loc);

@@ -43,6 +43,9 @@ function latexEnv(loc, base) {
   return e;
 }
 
+/** Windows can hand out 8.3 short paths like C:\\Users\\RUNNER~1; TeX treats "~" as a command, so always use long paths. */
+const longPath = (p) => { try { return fs.realpathSync.native(p); } catch { return p; } };
+
 const tarCmd = () => (process.platform === 'win32' ? path.join(process.env.SystemRoot || 'C:\\Windows', 'System32', 'tar.exe') : 'bsdtar');
 
 async function installLatex(loc, { onProgress = () => {}, onLog = () => {}, signal, downloadFn = download, runFn = run, platform = process.platform } = {}) {
@@ -111,7 +114,7 @@ async function installLatex(loc, { onProgress = () => {}, onLog = () => {}, sign
   const repoMismatch = /remote repository.*newer|older than the remote|cross-release/i.test(tails.join(' '));
 
   onProgress({ phase: 'verify', percent: 80, message: 'Testing LaTeX directly...' });
-  const diag = fs.mkdtempSync(path.join(loc.temp, 'latex-diag-'));
+  const diag = longPath(fs.mkdtempSync(path.join(loc.temp, 'latex-diag-')));
   const tex = path.join(diag, 'check.tex');
   let doc = MANIM_LIKE_DOC;
   // Use the exact template this Manim version compiles formulas with.
@@ -122,7 +125,7 @@ async function installLatex(loc, { onProgress = () => {}, onLog = () => {}, sign
   fs.writeFileSync(tex, doc);
   const tryLatex = async () => {
     for (const f of ['check.log', 'check.dvi']) fs.rmSync(path.join(diag, f), { force: true });
-    await exec(path.join(binDir(loc), 'latex.exe'), ['-interaction=nonstopmode', '-halt-on-error', `-output-directory=${diag}`, tex], { cwd: diag });
+    await exec(path.join(binDir(loc), 'latex.exe'), ['-interaction=nonstopmode', '-halt-on-error', 'check.tex'], { cwd: diag }); // relative name: no path ever reaches TeX
     const logFile = path.join(diag, 'check.log');
     const log = fs.existsSync(logFile) ? fs.readFileSync(logFile, 'utf8') : '';
     return { ok: fs.existsSync(path.join(diag, 'check.dvi')), text: `${out.join('\n')}\n${log}`, hasLog: !!log };
@@ -153,7 +156,7 @@ async function installLatex(loc, { onProgress = () => {}, onLog = () => {}, sign
   fs.rmSync(diag, { recursive: true, force: true });
 
   onProgress({ phase: 'verify', percent: 90, message: 'Testing a formula render with Manim...' });
-  const dir = fs.mkdtempSync(path.join(loc.temp, 'latex-check-'));
+  const dir = longPath(fs.mkdtempSync(path.join(loc.temp, 'latex-check-')));
   const scene = path.join(dir, 'check.py');
   fs.writeFileSync(scene, 'from manim import *\n\nclass Check(Scene):\n    def construct(self):\n        self.add(MathTex("x^2 + y^2 = z^2"))\n');
   r = await exec(L.python, ['-m', 'manim', 'render', scene, 'Check', '-ql', '--media_dir', path.join(dir, 'media'), '--disable_caching', '-s'], { cwd: dir });
@@ -167,4 +170,4 @@ async function installLatex(loc, { onProgress = () => {}, onLog = () => {}, sign
   onProgress({ phase: 'done', percent: 100, message: 'LaTeX is ready.' });
 }
 
-module.exports = { MANIM_LIKE_DOC, latexEnv, status, installLatex, binDir, latexDir, TINYTEX, PACKAGES };
+module.exports = { longPath, MANIM_LIKE_DOC, latexEnv, status, installLatex, binDir, latexDir, TINYTEX, PACKAGES };

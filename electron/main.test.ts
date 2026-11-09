@@ -47,6 +47,13 @@ describe('main process: preferences, updates, pending file', () => {
     expect((await call('update:install')).ok).toBe(false);
     expect((await call('update:open-notes')).ok).toBe(false);
   });
+  it('rejects a temp folder LaTeX cannot read, and accepts a normal one', async () => {
+    const mk = (n: string) => join(root, 'loc-' + n);
+    const good = { root: mk('a'), pythonEnv: join(mk('a'), 'py'), cache: join(mk('a'), 'c'), temp: join(mk('a'), 't') };
+    expect((await call('settings:set-locations', { ...good, temp: join(root, 'bad#folder') })).error).toMatch(/cannot contain/);
+    expect((await call('settings:set-locations', { ...good, temp: 'relative' })).ok).toBe(false);
+    expect((await call('settings:set-locations', good)).ok).toBe(true);
+  });
   it('no pending file by default', async () => {
     expect(await call('project:open-pending')).toMatchObject({ ok: false, canceled: true });
   });

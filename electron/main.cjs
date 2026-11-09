@@ -88,6 +88,10 @@ handle('settings:get', async () => ({
 }));
 handle('settings:set-locations', async (loc) => {
   if (job) return { ok: false, error: busy() };
+  if (!settings.valid(loc)) return { ok: false, error: 'Every location must be a full folder path, such as D:\\ManimBlocks.' };
+  loc = { ...loc };
+  for (const k of ['root', 'pythonEnv', 'cache', 'temp']) { fs.mkdirSync(loc[k], { recursive: true }); loc[k] = latex.longPath(loc[k]); }
+  if (/[~#%&$^{}]/.test(loc.temp)) return { ok: false, error: 'The temporary folder path cannot contain any of these characters: ~ # % & $ ^ { }  (LaTeX cannot read them). Choose another folder.' };
   settings.save(settingsFile, loc);
   state = { configured: true, locations: loc };
   return { ok: true };
