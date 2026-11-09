@@ -40,8 +40,8 @@ function latexEnv(loc, base) {
 
 const tarCmd = () => (process.platform === 'win32' ? path.join(process.env.SystemRoot || 'C:\\Windows', 'System32', 'tar.exe') : 'bsdtar');
 
-async function installLatex(loc, { onProgress = () => {}, onLog = () => {}, signal, downloadFn = download } = {}) {
-  if (process.platform !== 'win32') throw new Error('Automatic LaTeX setup is available on Windows only. Install TeX Live with your package manager instead.');
+async function installLatex(loc, { onProgress = () => {}, onLog = () => {}, signal, downloadFn = download, runFn = run, platform = process.platform } = {}) {
+  if (platform !== 'win32') throw new Error('Automatic LaTeX setup is available on Windows only. Install TeX Live with your package manager instead.');
   const st = env.envStatus(loc);
   if (!st.ready) throw new Error('Set up the rendering environment first, then install LaTeX.');
   const free = await env.freeBytes(loc.pythonEnv);
@@ -51,7 +51,7 @@ async function installLatex(loc, { onProgress = () => {}, onLog = () => {}, sign
   const out = [];
   const exec = async (cmd, args, opts = {}) => {
     out.length = 0;
-    const r = await run(cmd, args, { env: e, signal, ...opts, onLine: (l) => { const c = l.replace(env.ANSI, ''); out.push(c); onLog(c); } });
+    const r = await runFn(cmd, args, { env: e, signal, ...opts, onLine: (l) => { const c = l.replace(env.ANSI, ''); out.push(c); onLog(c); } });
     if (r.canceled) throw canceled();
     return r;
   };
@@ -70,17 +70,40 @@ async function installLatex(loc, { onProgress = () => {}, onLog = () => {}, sign
 
   onProgress({ phase: 'packages', percent: 50, message: 'Installing the LaTeX packages Manim needs...' });
   const tlmgr = path.join(binDir(loc), 'tlmgr.bat');
-  r = await exec('cmd.exe', ['/d', '/s', '/c', `""${tlmgr}" install ${PACKAGES.join(' ')}"`], { verbatim: true });
-  const outText = out.join('\n');
-  if (r.code !== 0) onLog(`(tlmgr reported problems, continuing to the real test: exit ${r.code})`);
-  const tlmgrTail = out.slice(-6).join(' | ');
+  const tl = (args, opts) => exec('cmd.exe', ['/d', '/s', '/c', `""${tlmgr}" ${args}"`], { verbatim: true, ...opts });
+  const haveDvisvgm = () => fs.existsSync(path.join(binDir(loc), 'dvisvgm.exe'));
+  const tails = [];
+  const attempt = async (label) => {
+    const r = await tl(`install ${PACKAGES.join(' ')}`);
+    if (r.code !== 0) onLog(`(tlmgr install reported problems: exit ${r.code})`);
+    tails.push(`${label}: ${out.slice(-5).join(' | ')}`);
+  };
+  await attempt('first try');
+  // tlmgr refuses to install anything until it has updated itself ("tlmgr itself needs to be updated").
+  // Try the documented remedies in turn, retrying the install after each one.
+  const remedies = [
+    ['updating the LaTeX package manager', async () => { await tl('update --self'); }],
+    ['running the official TeX Live updater', async () => {
+      const upd = path.join(loc.temp, 'update-tlmgr-latest.exe');
+      await downloadFn('https://mirror.ctan.org/systems/texlive/tlnet/update-tlmgr-latest.exe', upd, { signal });
+      try { await exec(upd, [], { signal: AbortSignal.any([signal, AbortSignal.timeout(300000)].filter(Boolean)) }); } finally { fs.rmSync(upd, { force: true }); }
+    }],
+    ['switching to the main TeX Live repository', async () => { await tl('option repository https://mirror.ctan.org/systems/texlive/tlnet'); }],
+  ];
+  for (const [name, fix] of remedies) {
+    if (haveDvisvgm()) break;
+    onProgress({ phase: 'packages', percent: 60, message: `LaTeX package source needs a fix: ${name}...` });
+    try { await fix(); } catch (err) { if (signal && signal.aborted) throw canceled(); onLog(`(${name} did not finish: ${err.message})`); }
+    await attempt(name);
+  }
+  const tlmgrTail = tails.join(' || ').slice(-900);
   for (const tool of ['latex', 'dvisvgm']) {
     const exePath = path.join(binDir(loc), `${tool}.exe`);
     if (!fs.existsSync(exePath)) throw new Error(`The LaTeX tool "${tool}" is missing after setup. Package installer said: ${tlmgrTail || '(no output)'}`);
     const t = await exec(exePath, ['--version']);
     if (t.code !== 0) throw new Error(`The LaTeX tool "${tool}" does not start (exit code ${t.code}). ${out.slice(-2).join(' ')}`);
   }
-  const repoMismatch = /remote repository.*newer|older than the remote|cross-release/i.test(outText);
+  const repoMismatch = /remote repository.*newer|older than the remote|cross-release/i.test(tails.join(' '));
 
   onProgress({ phase: 'verify', percent: 85, message: 'Testing a formula render...' });
   const dir = fs.mkdtempSync(path.join(loc.temp, 'latex-check-'));

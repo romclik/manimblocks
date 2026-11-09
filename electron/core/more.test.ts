@@ -164,3 +164,62 @@ describe('latex and file association helpers', () => {
     expect(existsSync(ok)).toBe(true);
   });
 });
+
+describe('LaTeX install: tlmgr remedies (simulated Windows run)', () => {
+  const win = process.platform === 'win32';
+  const setup = () => {
+    const root = tmp();
+    const loc = { root, pythonEnv: join(root, 'py'), cache: join(root, 'c'), temp: join(root, 't') };
+    const L = env.layout(loc);
+    mkdirSync(L.bin, { recursive: true }); mkdirSync(join(L.venv, win ? 'Scripts' : 'bin'), { recursive: true });
+    writeFileSync(L.python, ''); writeFileSync(L.ffmpeg, '');
+    writeFileSync(L.marker, JSON.stringify({ manim: req('./config.cjs').MANIM_VERSION, python: '3.12' }));
+    return { loc, bin: latex.binDir(loc) };
+  };
+  // Fake "machine": tar unpacks TinyTeX, tlmgr behaves according to the scenario.
+  const machine = (bin: string, scenario: 'ok' | 'needs-self-update' | 'needs-exe' | 'never') => {
+    const calls: string[] = [];
+    const tools = () => { for (const t of ['dvisvgm.exe']) writeFileSync(join(bin, t), ''); };
+    const runFn = async (cmd: string, args: string[], o: { onLine?: (l: string) => void } = {}) => {
+      const line = `${cmd} ${args.join(' ')}`; calls.push(line);
+      const say = (t: string) => o.onLine?.(t);
+      if (/tar/i.test(cmd)) { mkdirSync(bin, { recursive: true }); for (const t of ['latex.exe', 'tlmgr.bat']) writeFileSync(join(bin, t), ''); return { code: 0 }; }
+      if (/install /.test(line)) {
+        const selfUpdated = calls.some((c) => /update --self/.test(c)), exeRan = calls.some((c) => /update-tlmgr-latest/.test(c));
+        const fixed = scenario === 'ok' || (scenario === 'needs-self-update' && selfUpdated) || (scenario === 'needs-exe' && exeRan);
+        if (fixed) { tools(); return { code: 0 }; }
+        say('tlmgr itself needs to be updated. update-tlmgr-latest.exe'); say('tlmgr.pl: Terminating; please see warning above!'); return { code: 1 };
+      }
+      if (/dvisvgm\.exe|latex\.exe/.test(cmd) && args[0] === '--version') return { code: 0 };
+      return { code: 0 };
+    };
+    return { runFn, calls };
+  };
+  const dl = async (_u: string, d: string) => { writeFileSync(d, ''); return d; };
+  const go = (loc: any, runFn: any, extra = {}) => latex.installLatex(loc, { platform: 'win32', runFn, downloadFn: dl, ...extra });
+
+  it('works first time when tlmgr is fine', async () => {
+    const { loc, bin } = setup(); const m = machine(bin, 'ok');
+    await go(loc, m.runFn);
+    expect(m.calls.some((c) => /update --self/.test(c))).toBe(false);
+    expect(readFileSync(join(latex.latexDir(loc), 'ready.json'), 'utf8')).toContain('tinytex');
+  });
+  it('recovers with "tlmgr update --self"', async () => {
+    const { loc, bin } = setup(); const m = machine(bin, 'needs-self-update');
+    await go(loc, m.runFn);
+    expect(m.calls.filter((c) => /install /.test(c))).toHaveLength(2);
+    expect(m.calls.some((c) => /update-tlmgr-latest/.test(c))).toBe(false);
+  });
+  it('falls back to the official updater when --self is not enough', async () => {
+    const { loc, bin } = setup(); const m = machine(bin, 'needs-exe');
+    await go(loc, m.runFn);
+    expect(m.calls.some((c) => /update-tlmgr-latest/.test(c))).toBe(true);
+    expect(existsSync(join(latex.latexDir(loc), 'ready.json'))).toBe(true);
+  });
+  it('gives up with the package manager output in the message', async () => {
+    const { loc, bin } = setup(); const m = machine(bin, 'never');
+    await expect(go(loc, m.runFn)).rejects.toThrow(/"dvisvgm" is missing.*tlmgr itself needs to be updated/s);
+    expect(existsSync(join(latex.latexDir(loc), 'ready.json'))).toBe(false);
+    expect(m.calls.filter((c) => /install /.test(c))).toHaveLength(4);
+  });
+});
