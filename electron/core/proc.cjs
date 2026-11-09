@@ -8,9 +8,9 @@ function killTree(child) {
 }
 
 /** Runs a program without a shell. Calls onLine for every output line (\r-updated progress bars included). */
-function run(cmd, args, { env, cwd, onLine, signal, input } = {}) {
+function run(cmd, args, { env, cwd, onLine, signal, input, verbatim } = {}) {
   return new Promise((resolve, reject) => {
-    const child = spawn(cmd, args, { env, cwd, windowsHide: true, detached: process.platform !== 'win32', stdio: ['pipe', 'pipe', 'pipe'] });
+    const child = spawn(cmd, args, { env, cwd, windowsHide: true, windowsVerbatimArguments: !!verbatim, detached: process.platform !== 'win32', stdio: ['pipe', 'pipe', 'pipe'] });
     let canceled = false;
     const onAbort = () => { canceled = true; killTree(child); };
     if (signal) { if (signal.aborted) onAbort(); else signal.addEventListener('abort', onAbort, { once: true }); }

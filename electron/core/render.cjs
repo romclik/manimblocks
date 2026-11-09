@@ -3,10 +3,11 @@ const fs = require('fs');
 const path = require('path');
 const { run } = require('./proc.cjs');
 const env = require('./env.cjs');
+const latex = require('./latex.cjs');
 
 const QUALITY = { l: { flag: '-ql', need: 0.5e9 }, m: { flag: '-qm', need: 1e9 }, h: { flag: '-qh', need: 3e9 } };
 const ANIM_RE = /Animation\s+(\d+)\s*:\s*(.*?)\s*:\s+(\d+)%/;
-const LATEX_MSG = 'This animation uses MathTex, which needs LaTeX, and LaTeX was not found. Install MiKTeX (https://miktex.org/download), restart ManimBlocks, and render again. (Automatic LaTeX setup is not built yet.)';
+const LATEX_MSG = 'This animation uses MathTex, which needs LaTeX, and LaTeX was not found. Open Settings > LaTeX and click Install, or install MiKTeX (https://miktex.org/download).';
 
 // Manim prints tqdm bars on a terminal, but plain log lines ("Animation 3 : Partial movie file written") when piped, as here.
 const DONE_RE = /Animation\s+(\d+)\s*:\s*Partial\b/;
@@ -16,11 +17,6 @@ const parseProgress = (line) => {
   const d = DONE_RE.exec(line);
   return d ? { animation: +d[1] + 1, percent: 100, done: true } : null;
 };
-
-function hasLatex() {
-  const names = process.platform === 'win32' ? ['latex.exe'] : ['latex'];
-  return (process.env.PATH || process.env.Path || '').split(path.delimiter).some((d) => d && names.some((n) => fs.existsSync(path.join(d, n))));
-}
 
 function summarizeError(lines) {
   const text = lines.join('\n');
@@ -53,7 +49,7 @@ async function validateScene(python, scene, e, signal) {
   return { ok: r.code === 0 && !r.canceled, canceled: r.canceled, messages: lines };
 }
 
-async function render({ code, quality, loc, onProgress = () => {}, onLog = () => {}, signal }) {
+async function render({ code, quality, fps = 0, loc, onProgress = () => {}, onLog = () => {}, signal }) {
   const fail = (error) => ({ ok: false, error });
   const q = QUALITY[quality];
   if (!q) return fail('Unknown render quality.');
@@ -63,7 +59,8 @@ async function render({ code, quality, loc, onProgress = () => {}, onLog = () =>
   fs.mkdirSync(loc.temp, { recursive: true });
   const free = await env.freeBytes(loc.temp);
   if (free < q.need) return fail(`Not enough free disk space for temporary render files: ${(q.need / 1e9).toFixed(1)} GB needed, ${(free / 1e9).toFixed(1)} GB free. Free up space or choose another temp folder.`);
-  if (/\bMathTex\(/.test(code) && !hasLatex()) return fail(LATEX_MSG);
+  if (/\bMathTex\(/.test(code) && !latex.status(loc).available) return { ok: false, error: LATEX_MSG, needsLatex: true };
+  if (!Number.isInteger(fps) || fps < 0 || fps > 120) return fail('Invalid frame rate.');
 
   pruneRenders(loc.temp, 3);
   const dir = fs.mkdtempSync(path.join(loc.temp, 'render-'));
@@ -78,7 +75,7 @@ async function render({ code, quality, loc, onProgress = () => {}, onLog = () =>
 
   const tail = [];
   let lastSent = 0;
-  const r = await run(L.python, ['-m', 'manim', 'render', scene, 'GeneratedScene', q.flag, '--media_dir', path.join(dir, 'media'), '--disable_caching'], {
+  const r = await run(L.python, ['-m', 'manim', 'render', scene, 'GeneratedScene', q.flag, ...(fps > 0 ? ['--fps', String(fps)] : []), '--media_dir', path.join(dir, 'media'), '--disable_caching'], {
     env: { ...e, COLUMNS: '400' }, cwd: dir, signal,
     onLine: (raw) => {
       const line = raw.replace(env.ANSI, '');
@@ -94,9 +91,9 @@ async function render({ code, quality, loc, onProgress = () => {}, onLog = () =>
     },
   });
   if (r.canceled) return { ok: false, canceled: true };
-  if (r.code !== 0) return fail(summarizeError(tail));
+  if (r.code !== 0) { const msg = summarizeError(tail); return msg === LATEX_MSG ? { ok: false, error: msg, needsLatex: true } : fail(msg); }
   const video = findVideo(path.join(dir, 'media'));
-  if (!video) return fail('Manim finished but no video file was found.');
+  if (!video) return fail(/self\.(play|wait)\(/.test(code) ? 'Manim finished but no video file was found.' : 'Nothing to play yet: this animation has no animation or wait blocks. Add one, such as "fade in" or "write", under your objects.');
   return { ok: true, videoPath: video };
 }
 

@@ -31,7 +31,9 @@ function toolEnv(loc) {
     TEMP: loc.temp, TMP: loc.temp, TMPDIR: loc.temp,
     PYTHONUTF8: '1', PYTHONIOENCODING: 'utf-8', PYTHONDONTWRITEBYTECODE: '1', NO_COLOR: '1',
   });
-  e[pk] = layout(loc).bin + path.delimiter + (e[pk] || '');
+  const latexBin = path.join(loc.pythonEnv, 'latex', 'TinyTeX', 'bin', 'windows');
+  const extra = fs.existsSync(path.join(loc.pythonEnv, 'latex', 'ready.json')) ? latexBin + path.delimiter : '';
+  e[pk] = layout(loc).bin + path.delimiter + extra + (e[pk] || '');
   return e;
 }
 

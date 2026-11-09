@@ -6,12 +6,13 @@ import { mkdtempSync, existsSync, statSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join, resolve } from 'node:path';
 import { generate } from '../src/codegen/generate';
-import { FULL } from '../src/codegen/fixtures';
+import { FULL, prog as progOf, B, ref, seq } from '../src/codegen/fixtures';
 
 const require = createRequire(import.meta.url);
 const env = require('./core/env.cjs');
 const { render } = require('./core/render.cjs');
 const settings = require('./core/settings.cjs');
+const latex = require('./core/latex.cjs');
 const uv = resolve(__dirname, '..', '.tools', 'uv', process.platform === 'win32' ? 'uv.exe' : 'uv');
 
 describe.skipIf(!process.env.MB_E2E)('real environment install + render', () => {
@@ -37,6 +38,32 @@ describe.skipIf(!process.env.MB_E2E)('real environment install + render', () => 
     expect(statSync(res.videoPath).size).toBeGreaterThan(10_000);
     expect(Math.max(...prog.map((p) => p.animation ?? 0))).toBeGreaterThanOrEqual(15);
   }, 600_000);
+
+  it('applies the frame-rate setting', async () => {
+    const res = await render({ code: generate(progOf(seq(B('obj_circle', { R: '1', COLOR: 'BLUE', VAR: ref('c') }), B('anim_fadein', { OBJ: ref('c') })), [{ id: 'c', name: 'c' }])).code, quality: 'l', fps: 10, loc });
+    expect(res.error ?? '').toBe('');
+    expect(res.ok).toBe(true);
+  }, 300_000);
+
+  it('MathTex: explains when LaTeX is missing, installs it on Windows (MB_E2E_LATEX), and renders formulas', async (ctx) => {
+    const code = generate(progOf(seq(B('obj_mathtex', { TEX: 'x^2 + y^2 = z^2', COLOR: 'WHITE', VAR: ref('f') }), B('anim_write', { OBJ: ref('f') })), [{ id: 'f', name: 'f' }])).code;
+    if (!latex.status(loc).available) {
+      const missing = await render({ code, quality: 'l', loc });
+      expect(missing).toMatchObject({ ok: false, needsLatex: true });
+      if (!process.env.MB_E2E_LATEX) return ctx.skip();
+      await latex.installLatex(loc, { onLog: (l: string) => process.stdout.write(`  ${l}\n`) });
+      expect(latex.status(loc).source).toBe('managed');
+    }
+    const res = await render({ code, quality: 'l', loc });
+    expect(res.error ?? '').toBe('');
+    expect(res.ok).toBe(true);
+  }, 1_800_000);
+
+  it('explains when there is nothing to play', async () => {
+    const res = await render({ code: generate(progOf(B('obj_circle', { R: '1', COLOR: 'BLUE', VAR: ref('c') }), [{ id: 'c', name: 'c' }])).code, quality: 'l', loc });
+    expect(res.ok).toBe(false);
+    expect(res.error).toMatch(/Nothing to play yet/);
+  }, 300_000);
 
   it('blocks tampered code before running it', async () => {
     const res = await render({ code: 'from manim import *\nimport os\n', quality: 'l', loc });
