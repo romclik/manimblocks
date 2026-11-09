@@ -12,6 +12,7 @@ const { Prefs, sanitize, DEFAULTS } = req('./prefs.cjs');
 const { download } = req('./download.cjs');
 const { createUpdater, isNewer, notesToText } = req('./updater.cjs');
 const latex = req('./latex.cjs');
+const env = req('./env.cjs');
 const { pathFromArgv } = req('./project.cjs');
 const tmp = () => mkdtempSync(join(tmpdir(), 'mbx-'));
 const abs = (n: string) => (process.platform === 'win32' ? `C:\\x\\${n}` : `/x/${n}`);
@@ -142,6 +143,14 @@ describe('latex and file association helpers', () => {
     expect(latex.TINYTEX.sha256).toMatch(/^[0-9a-f]{64}$/);
     expect(latex.TINYTEX.url.startsWith('https://github.com/rstudio/tinytex-releases/releases/download/')).toBe(true);
     expect(latex.PACKAGES).toContain('dvisvgm');
+  });
+  it('LaTeX tools are put first on PATH while installing, even before the ready marker exists', () => {
+    const loc = { root: tmp(), pythonEnv: join(tmp(), 'py'), cache: '', temp: '' };
+    const e = latex.latexEnv(loc, { Path: 'C:\\Windows', OTHER: '1' });
+    expect(e.Path.startsWith(latex.binDir(loc))).toBe(true);
+    expect(e.Path).toContain('C:\\Windows');
+    expect(e.PATH).toBeUndefined();
+    expect(env.toolEnv(loc)[Object.keys(env.toolEnv(loc)).find((k) => k.toLowerCase() === 'path')!]).not.toContain('TinyTeX');
   });
   it.skipIf(process.platform === 'win32')('LaTeX install explains itself off Windows', async () => {
     await expect(latex.installLatex({ pythonEnv: tmp(), temp: tmp() })).rejects.toThrow(/Windows only/);

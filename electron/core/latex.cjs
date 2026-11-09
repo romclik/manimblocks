@@ -30,6 +30,14 @@ function status(loc) {
   return { available: managed || !!onPath, source: managed ? 'managed' : onPath ? 'system' : 'none', path: managed ? binDir(loc) : onPath };
 }
 
+/** Environment with the private LaTeX tools first on PATH (needed while installing, before the "ready" marker exists). */
+function latexEnv(loc, base) {
+  const e = { ...base };
+  const pk = Object.keys(e).find((k) => k.toLowerCase() === 'path') || 'PATH';
+  e[pk] = binDir(loc) + path.delimiter + (e[pk] || '');
+  return e;
+}
+
 const tarCmd = () => (process.platform === 'win32' ? path.join(process.env.SystemRoot || 'C:\\Windows', 'System32', 'tar.exe') : 'bsdtar');
 
 async function installLatex(loc, { onProgress = () => {}, onLog = () => {}, signal, downloadFn = download } = {}) {
@@ -39,7 +47,7 @@ async function installLatex(loc, { onProgress = () => {}, onLog = () => {}, sign
   const free = await env.freeBytes(loc.pythonEnv);
   if (free < TINYTEX.need) throw new Error(`Not enough free disk space on ${path.parse(loc.pythonEnv).root}: about ${(TINYTEX.need / 1e9).toFixed(1)} GB needed, ${(free / 1e9).toFixed(1)} GB free.`);
   const canceled = () => Object.assign(new Error('Canceled'), { canceled: true });
-  const L = env.layout(loc), e = env.toolEnv(loc);
+  const L = env.layout(loc), e = latexEnv(loc, env.toolEnv(loc));
   const out = [];
   const exec = async (cmd, args, opts = {}) => {
     out.length = 0;
@@ -65,6 +73,13 @@ async function installLatex(loc, { onProgress = () => {}, onLog = () => {}, sign
   r = await exec('cmd.exe', ['/d', '/s', '/c', `""${tlmgr}" install ${PACKAGES.join(' ')}"`], { verbatim: true });
   const outText = out.join('\n');
   if (r.code !== 0) onLog(`(tlmgr reported problems, continuing to the real test: exit ${r.code})`);
+  const tlmgrTail = out.slice(-6).join(' | ');
+  for (const tool of ['latex', 'dvisvgm']) {
+    const exePath = path.join(binDir(loc), `${tool}.exe`);
+    if (!fs.existsSync(exePath)) throw new Error(`The LaTeX tool "${tool}" is missing after setup. Package installer said: ${tlmgrTail || '(no output)'}`);
+    const t = await exec(exePath, ['--version']);
+    if (t.code !== 0) throw new Error(`The LaTeX tool "${tool}" does not start (exit code ${t.code}). ${out.slice(-2).join(' ')}`);
+  }
   const repoMismatch = /remote repository.*newer|older than the remote|cross-release/i.test(outText);
 
   onProgress({ phase: 'verify', percent: 85, message: 'Testing a formula render...' });
@@ -82,4 +97,4 @@ async function installLatex(loc, { onProgress = () => {}, onLog = () => {}, sign
   onProgress({ phase: 'done', percent: 100, message: 'LaTeX is ready.' });
 }
 
-module.exports = { status, installLatex, binDir, latexDir, TINYTEX, PACKAGES };
+module.exports = { latexEnv, status, installLatex, binDir, latexDir, TINYTEX, PACKAGES };
