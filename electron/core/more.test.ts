@@ -177,7 +177,7 @@ describe('LaTeX install: tlmgr remedies (simulated Windows run)', () => {
     return { loc, bin: latex.binDir(loc) };
   };
   // Fake "machine": tar unpacks TinyTeX, tlmgr behaves according to the scenario.
-  const machine = (bin: string, scenario: 'ok' | 'needs-self-update' | 'needs-exe' | 'never') => {
+  const machine = (bin: string, scenario: 'ok' | 'needs-self-update' | 'needs-exe' | 'never' | 'needs-formats' | 'needs-sty') => {
     const calls: string[] = [];
     const tools = () => { for (const t of ['dvisvgm.exe']) writeFileSync(join(bin, t), ''); };
     const runFn = async (cmd: string, args: string[], o: { onLine?: (l: string) => void } = {}) => {
@@ -186,11 +186,19 @@ describe('LaTeX install: tlmgr remedies (simulated Windows run)', () => {
       if (/tar/i.test(cmd)) { mkdirSync(bin, { recursive: true }); for (const t of ['latex.exe', 'tlmgr.bat']) writeFileSync(join(bin, t), ''); return { code: 0 }; }
       if (/install /.test(line)) {
         const selfUpdated = calls.some((c) => /update --self/.test(c)), exeRan = calls.some((c) => /update-tlmgr-latest/.test(c));
-        const fixed = scenario === 'ok' || (scenario === 'needs-self-update' && selfUpdated) || (scenario === 'needs-exe' && exeRan);
+        const fixed = scenario === 'ok' || scenario === 'needs-formats' || scenario === 'needs-sty' || (scenario === 'needs-self-update' && selfUpdated) || (scenario === 'needs-exe' && exeRan);
         if (fixed) { tools(); return { code: 0 }; }
         say('tlmgr itself needs to be updated. update-tlmgr-latest.exe'); say('tlmgr.pl: Terminating; please see warning above!'); return { code: 1 };
       }
       if (/dvisvgm\.exe|latex\.exe/.test(cmd) && args[0] === '--version') return { code: 0 };
+      if (args[0] === '-c' && /tex_template/.test(args[1])) { for (const l of ['(warnings are printed first)', ...latex.MANIM_LIKE_DOC.split('\n')]) say(l); return { code: 0 }; }
+      if (/latex\.exe$/.test(cmd) && args.some((a) => /check\.tex$/.test(a))) {
+        const dir = args.find((a) => a.startsWith('-output-directory='))!.slice(18);
+        const formatsBuilt = calls.some((c) => /fmtutil/.test(c)), styInstalled = calls.some((c) => /install amsfonts/.test(c));
+        if (scenario === 'needs-formats' && !formatsBuilt) return { code: 1 }; // dies before writing any log
+        if (scenario === 'needs-sty' && !styInstalled) { writeFileSync(join(dir, 'check.log'), "! LaTeX Error: File `amssymb.sty' not found.\n"); say("! LaTeX Error: File `amssymb.sty' not found."); return { code: 1 }; }
+        writeFileSync(join(dir, 'check.dvi'), ''); writeFileSync(join(dir, 'check.log'), 'ok'); return { code: 0 };
+      }
       return { code: 0 };
     };
     return { runFn, calls };
@@ -215,6 +223,22 @@ describe('LaTeX install: tlmgr remedies (simulated Windows run)', () => {
     await go(loc, m.runFn);
     expect(m.calls.some((c) => /update-tlmgr-latest/.test(c))).toBe(true);
     expect(existsSync(join(latex.latexDir(loc), 'ready.json'))).toBe(true);
+  });
+  it('rebuilds format files when latex dies without a log', async () => {
+    const { loc, bin } = setup(); const m = machine(bin, 'needs-formats');
+    await go(loc, m.runFn);
+    expect(m.calls.some((c) => /fmtutil/.test(c))).toBe(true);
+    expect(existsSync(join(latex.latexDir(loc), 'ready.json'))).toBe(true);
+  });
+  it('installs the package behind a missing .sty file (amssymb -> amsfonts)', async () => {
+    const { loc, bin } = setup(); const m = machine(bin, 'needs-sty');
+    await go(loc, m.runFn);
+    expect(m.calls.some((c) => /install amsfonts/.test(c))).toBe(true);
+    expect(existsSync(join(latex.latexDir(loc), 'ready.json'))).toBe(true);
+  });
+  it('the diagnostic document mirrors the preamble Manim uses', () => {
+    for (const pkg of ['standalone', 'babel', 'amsmath', 'amssymb']) expect(latex.MANIM_LIKE_DOC).toContain(pkg);
+    expect(latex.MANIM_LIKE_DOC).toContain('\\begin{align*}');
   });
   it('gives up with the package manager output in the message', async () => {
     const { loc, bin } = setup(); const m = machine(bin, 'never');

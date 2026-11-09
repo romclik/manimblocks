@@ -16,6 +16,11 @@ const TINYTEX = {
 // Packages Manim's LaTeX templates need (from the Manim documentation).
 const PACKAGES = 'amsmath babel-english cbfonts-fd cm-super count1to ctex doublestroke dvisvgm everysel fontspec frcursive fundus-calligra gnu-freefont jknapltx latex-bin mathastext microtype multitoc physics preview prelim2e ragged2e relsize rsfs setspace standalone tipa wasy wasysym xcolor xetex xkeyval'.split(' ');
 
+// Fallback test document (Manim 0.22's default template). The real template is read from Manim itself when possible.
+const MANIM_LIKE_DOC = ['\\documentclass[preview]{standalone}', '\\usepackage[english]{babel}', '\\usepackage{amsmath}', '\\usepackage{amssymb}', '\\begin{document}', '\\begin{align*}', 'x^2 + y^2 = z^2', '\\end{align*}', '\\end{document}', ''].join('\n');
+// LaTeX file name -> TeX Live package that provides it (when they differ).
+const FILE_TO_PACKAGE = { dsfont: 'doublestroke', calligra: 'fundus-calligra', mathrsfs: 'jknapltx', amssymb: 'amsfonts', amsmath: 'amsmath', pifont: 'psnfss', babel: 'babel', english: 'babel-english', standalone: 'standalone' };
+
 const latexDir = (loc) => path.join(loc.pythonEnv, 'latex');
 const binDir = (loc) => path.join(latexDir(loc), 'TinyTeX', 'bin', 'windows');
 const exe = process.platform === 'win32' ? 'latex.exe' : 'latex';
@@ -105,7 +110,49 @@ async function installLatex(loc, { onProgress = () => {}, onLog = () => {}, sign
   }
   const repoMismatch = /remote repository.*newer|older than the remote|cross-release/i.test(tails.join(' '));
 
-  onProgress({ phase: 'verify', percent: 85, message: 'Testing a formula render...' });
+  onProgress({ phase: 'verify', percent: 80, message: 'Testing LaTeX directly...' });
+  const diag = fs.mkdtempSync(path.join(loc.temp, 'latex-diag-'));
+  const tex = path.join(diag, 'check.tex');
+  let doc = MANIM_LIKE_DOC;
+  // Use the exact template this Manim version compiles formulas with.
+  await exec(L.python, ['-c', 'from manim import config; print(config.tex_template.get_texcode_for_expression_in_env("x^2 + y^2 = z^2", "align*"))']);
+  const lines = out.map((l) => l.trimEnd());
+  const from = lines.findIndex((l) => l.startsWith('\\documentclass')), to = lines.lastIndexOf('\\end{document}');
+  if (from >= 0 && to > from) doc = lines.slice(from, to + 1).join('\n') + '\n';
+  fs.writeFileSync(tex, doc);
+  const tryLatex = async () => {
+    for (const f of ['check.log', 'check.dvi']) fs.rmSync(path.join(diag, f), { force: true });
+    await exec(path.join(binDir(loc), 'latex.exe'), ['-interaction=nonstopmode', '-halt-on-error', `-output-directory=${diag}`, tex], { cwd: diag });
+    const logFile = path.join(diag, 'check.log');
+    const log = fs.existsSync(logFile) ? fs.readFileSync(logFile, 'utf8') : '';
+    return { ok: fs.existsSync(path.join(diag, 'check.dvi')), text: `${out.join('\n')}\n${log}`, hasLog: !!log };
+  };
+  let res = await tryLatex(), rebuilt = false;
+  const fixed = new Set();
+  for (let i = 0; i < 6 && !res.ok; i++) {
+    const missing = /File [`']([^'`]+?)(?:\.(?:sty|cls|def|fd))?' not found/.exec(res.text);
+    if (!rebuilt && (!res.hasLog || /format file|\.fmt/i.test(res.text))) {
+      rebuilt = true;
+      onProgress({ phase: 'verify', percent: 82, message: 'Building LaTeX format files...' });
+      const fm = fs.existsSync(path.join(binDir(loc), 'fmtutil-sys.exe')) ? path.join(binDir(loc), 'fmtutil-sys.exe') : path.join(binDir(loc), 'fmtutil.exe');
+      await exec(fm, fs.existsSync(path.join(binDir(loc), 'fmtutil-sys.exe')) ? ['--all'] : ['--sys', '--all']);
+      tails.push(`formats: ${out.slice(-3).join(' | ')}`);
+    } else if (missing && !fixed.has(missing[1])) {
+      const pkg = FILE_TO_PACKAGE[missing[1]] || missing[1];
+      fixed.add(missing[1]);
+      onProgress({ phase: 'verify', percent: 83, message: `Installing the LaTeX package "${pkg}"...` });
+      await tl(`install ${pkg}`);
+      tails.push(`install ${pkg}: ${out.slice(-2).join(' | ')}`);
+    } else break;
+    res = await tryLatex();
+  }
+  if (!res.ok) {
+    const lines = res.text.split('\n').filter((l) => l.trim());
+    throw new Error(`LaTeX was installed but cannot compile a formula yet. ${lines.slice(-8).join(' | ')} (setup notes: ${tails.join(' || ').slice(-500)})`);
+  }
+  fs.rmSync(diag, { recursive: true, force: true });
+
+  onProgress({ phase: 'verify', percent: 90, message: 'Testing a formula render with Manim...' });
   const dir = fs.mkdtempSync(path.join(loc.temp, 'latex-check-'));
   const scene = path.join(dir, 'check.py');
   fs.writeFileSync(scene, 'from manim import *\n\nclass Check(Scene):\n    def construct(self):\n        self.add(MathTex("x^2 + y^2 = z^2"))\n');
@@ -120,4 +167,4 @@ async function installLatex(loc, { onProgress = () => {}, onLog = () => {}, sign
   onProgress({ phase: 'done', percent: 100, message: 'LaTeX is ready.' });
 }
 
-module.exports = { latexEnv, status, installLatex, binDir, latexDir, TINYTEX, PACKAGES };
+module.exports = { MANIM_LIKE_DOC, latexEnv, status, installLatex, binDir, latexDir, TINYTEX, PACKAGES };
