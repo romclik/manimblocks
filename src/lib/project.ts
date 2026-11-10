@@ -2,7 +2,7 @@
 import { version } from '../../package.json';
 
 export const PROJECT_FORMAT = 'manimblocks-project';
-export const PROJECT_VERSION = 1;
+export const PROJECT_VERSION = 2;
 const MAX_BLOCKS = 20000;
 const MAX_DEPTH = 300;
 
@@ -18,6 +18,7 @@ export function parseProject(text: string, knownTypes: ReadonlySet<string>): Par
   const o = data as Record<string, unknown> | null;
   if (!o || typeof o !== 'object' || o.format !== PROJECT_FORMAT) return { ok: false, error: 'This is not a ManimBlocks project file.' };
   if (typeof o.version !== 'number' || !Number.isInteger(o.version) || o.version < 1) return { ok: false, error: 'The file is damaged: its version number is invalid.' };
+  if (o.version < PROJECT_VERSION) return { ok: false, error: 'This project was saved by an older test version of ManimBlocks, which named objects differently, so it cannot be opened. Recreate it with the new blocks.' };
   if (o.version > PROJECT_VERSION) return { ok: false, error: 'This project was saved by a newer version of ManimBlocks. Update ManimBlocks to open it.' };
   const ws = o.workspace as Record<string, unknown> | null;
   if (!ws || typeof ws !== 'object' || Array.isArray(ws)) return { ok: false, error: 'The file is damaged: the workspace is missing.' };

@@ -6,7 +6,7 @@ COLORS = "WHITE RED GREEN BLUE YELLOW ORANGE PURPLE PINK TEAL GOLD GRAY BLACK".s
 GLOBALS = set(COLORS) | set("""Text MathTex Circle Square Rectangle Triangle Line Dot Arrow NumberPlane Write Create FadeIn FadeOut
 GrowFromCenter ShrinkToCenter Rotate Transform Indicate Circumscribe RIGHT UP DEGREES range int config MovingCameraScene""".split())
 ATTRS = set("play wait add animate move_to shift scale set_color set_opacity set_stroke set_fill camera frame set frame_width frame_rate".split())
-KWARGS = set("color radius side_length width height point angle run_time opacity".split())
+KWARGS = set("color radius side_length width height point angle run_time opacity disable_ligatures".split())
 errors = []
 
 def bad(node, msg):
@@ -38,6 +38,13 @@ def expr(n, names):
         if not all(isinstance(o, (ast.Lt, ast.Gt, ast.Eq, ast.NotEq, ast.LtE, ast.GtE)) for o in n.ops): bad(n, "comparison not allowed")
         expr(n.left, names)
         for c in n.comparators: expr(c, names)
+    elif isinstance(n, ast.Subscript):
+        # Only name[a:b] with plain whole numbers: a part of a text object.
+        sl = n.slice
+        ok = isinstance(n.value, ast.Name) and n.value.id in names and n.value.id not in GLOBALS and n.value.id not in ("self", "_rt", "_") and isinstance(sl, ast.Slice) and sl.step is None \
+            and all(isinstance(x, ast.Constant) and type(x.value) is int and x.value >= 0 for x in (sl.lower, sl.upper))
+        if not ok: bad(n, "only name[number:number] is allowed")
+        else: expr(n.value, names)
     elif isinstance(n, ast.Attribute):
         if n.attr not in ATTRS: bad(n, f"attribute '{n.attr}' is not allowed")
         expr(n.value, names)

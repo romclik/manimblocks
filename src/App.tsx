@@ -11,7 +11,7 @@ import { generate, type WorkspaceState } from './codegen/generate';
 import { copyText, saveTextFile } from './lib/files';
 
 const QUALITY_LABEL: Record<Quality, string> = { l: 'Low (480p, 15 fps)', m: 'Medium (720p, 30 fps)', h: 'High (1080p, 60 fps)' };
-const DEFAULT_PREFS: Prefs = { theme: 'dark', previewQuality: 'l', renderQuality: 'm', fps: 0, exportDir: '', autoUpdate: true, remindUntil: 0, remindVersion: '' };
+const DEFAULT_PREFS: Prefs = { theme: 'dark', previewQuality: 'l', renderQuality: 'm', fps: 0, exportDir: '', paletteAutoHide: false, autoUpdate: true, remindUntil: 0, remindVersion: '' };
 
 export default function App() {
   const api = window.manimBlocks;
@@ -166,13 +166,13 @@ export default function App() {
         </div>
       )}
       <main className="main">
-        <BlocklyEditor theme={prefs.theme} onReady={onReady} onChange={setState} />
+        <BlocklyEditor theme={prefs.theme} autoHidePalette={prefs.paletteAutoHide} onReady={onReady} onChange={setState} />
         <aside className="preview">
           <h3>Preview</h3>
           <VideoPreview url={videoUrl} />
           {lastLabel && <p className="dim small">{lastLabel}. Not what you wanted? Change qualities in Settings.</p>}
           {hasVideo && <div className="vbtns"><button onClick={() => video('open')}>Open in video player</button><button onClick={() => video('show')}>Show in folder</button></div>}
-          <p className="dim small">Tip: drag a <b>when animation starts</b> block in, then add blocks under it. <b>Preview</b> is quick and low quality; <b>Render</b> makes the final video.</p>
+          <p className="dim small">Tip: snap blocks under the <b>when animation starts</b> block. <b>Preview</b> is quick and low quality; <b>Render</b> makes the final video.</p>
         </aside>
       </main>
       <CodePanel result={result} onSelectBlock={selectBlock} tab={tab} onTab={setTab} log={log} renderError={renderError} />

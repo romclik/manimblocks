@@ -6,13 +6,13 @@ import { generate, type WorkspaceState } from '../codegen/generate';
 import { FULL } from '../codegen/fixtures';
 
 const known = new Set(BLOCK_DEFINITIONS.map((b) => b.type));
-const wrap = (workspace: unknown, extra: object = {}) => JSON.stringify({ format: PROJECT_FORMAT, version: 1, workspace, ...extra });
+const wrap = (workspace: unknown, extra: object = {}) => JSON.stringify({ format: PROJECT_FORMAT, version: 2, workspace, ...extra });
 
 describe('project files', () => {
   it('round-trips a full project through real Blockly and regenerates identical code', () => {
     registerBlocks();
     const ws1 = new Blockly.Workspace();
-    Blockly.serialization.workspaces.load({ blocks: FULL.blocks, variables: FULL.variables } as never, ws1);
+    Blockly.serialization.workspaces.load({ blocks: FULL.blocks } as never, ws1);
     const text = serializeProject(Blockly.serialization.workspaces.save(ws1));
     const parsed = parseProject(text, known);
     expect(parsed.ok).toBe(true);
@@ -32,11 +32,12 @@ describe('project files', () => {
     ['null', 'null', /not a ManimBlocks/],
     ['newer version', wrap({}, { version: 99 }), /newer version/],
     ['bad version', wrap({}, { version: 'x' }), /version number/],
-    ['no workspace', JSON.stringify({ format: PROJECT_FORMAT, version: 1 }), /workspace is missing/],
+    ['no workspace', JSON.stringify({ format: PROJECT_FORMAT, version: 2 }), /workspace is missing/],
     ['blocks not a list', wrap({ blocks: { blocks: 5 } }), /block list/],
     ['block without type', wrap({ blocks: { blocks: [{ id: 'x' }] } }), /no type/],
     ['unknown block', wrap({ blocks: { blocks: [{ type: 'evil_block' }] } }), /does not know \(evil_block\)/],
     ['bad variables', wrap({ variables: [{ id: 1 }] }), /variable list/],
+    ['older test version', wrap({}, { version: 1 }), /older test version/],
   ])('rejects %s with a friendly message', (_n, text, re) => {
     const r = parseProject(text as string, known);
     expect(r.ok).toBe(false);

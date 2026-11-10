@@ -40,6 +40,9 @@ export function SettingsDialog({ info, prefs, update, onPrefs, onClose, onSetup,
         <h3>Appearance</h3>
         <div className="form"><label>Theme</label>
           <select value={prefs.theme} onChange={(e) => onPrefs({ theme: e.target.value as Prefs['theme'] })}><option value="dark">Dark</option><option value="light">Light</option></select></div>
+        <div className="form"><label>Hide block palette</label>
+          <input type="checkbox" checked={prefs.paletteAutoHide} onChange={(e) => onPrefs({ paletteAutoHide: e.target.checked })} />
+          <span className="hint2">Off: the palette is always visible. On: it only appears while the mouse is over the category list, and hides when the mouse leaves.</span></div>
 
         <h3>Rendering</h3>
         <div className="form"><label>Preview quality</label>

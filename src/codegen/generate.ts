@@ -3,14 +3,18 @@
 // Security: users never type Python. Every value is validated (numbers/formulas, whitelisted
 // colors, escaped strings, sanitized identifiers) before it can reach the generated code.
 import { COLOR_VALUES } from '../blocks/colors';
+import { listObjects, inputBlock, type ObjectInfo } from '../blocks/objects';
 
 export interface BlockState {
   type: string; id?: string;
   fields?: Record<string, unknown>;
+  extraState?: unknown;
   inputs?: Record<string, { block?: BlockState; shadow?: BlockState }>;
   next?: { block?: BlockState };
 }
 export interface WorkspaceState { blocks?: { blocks?: BlockState[] }; variables?: { id: string; name: string }[] }
+/** An object oval resolved to Python: `code` is the expression, `text` is the characters it covers (text objects only). */
+export interface ObjRef { info: ObjectInfo; code: string; text?: string }
 export interface Problem { severity: 'error' | 'warning'; message: string; blockId?: string }
 export interface GenerateResult { code: string; problems: Problem[]; errorCount: number }
 
@@ -20,67 +24,65 @@ const RESERVED = new Set(['self', 'config', 'np']);
 export const pyStr = (s: string): string =>
   '"' + s.replace(/\0/g, '').replace(/\\/g, '\\\\').replace(/"/g, '\\"').replace(/\r/g, '\\r').replace(/\n/g, '\\n').replace(/\t/g, '\\t') + '"';
 
-type Kind = 'object' | 'number';
-
 class Ctx {
   problems: Problem[] = [];
-  kinds = new Map<string, Kind>();
-  assigned = new Set<string>();
   loops: string[] = [];
   fps: number | null = null;
-  private byId = new Map<string, { name: string; py: string }>();
-  private byName = new Map<string, string>();
-  private used = new Set<string>();
+  objs = new Map<string, ObjectInfo>();
+  /** Objects whose "create" block has already run at this point of the program. */
+  assigned = new Set<string>();
+  /** The characters of every text object created so far (needed to pick parts of it). */
+  texts = new Map<string, string>();
 
-  constructor(vars: { id: string; name: string }[]) {
-    for (const v of vars) {
-      let py = v.name.replace(/[^A-Za-z0-9_]/g, '_').replace(/^_+$/, '') || 'v';
-      if (/^[0-9]/.test(py)) py = 'v_' + py;
-      if (KEYWORDS.has(py) || RESERVED.has(py) || py.startsWith('__') || py.startsWith('_rt')) py += '_';
-      if (/^[A-Z]/.test(py)) py = 'my_' + py; // never shadow Manim classes such as Circle
-      let unique = py, k = 2;
-      while (this.used.has(unique)) unique = `${py}_${k++}`;
-      this.used.add(unique);
-      this.byId.set(v.id, { name: v.name, py: unique });
-      this.byName.set(v.name, unique);
-    }
-  }
+  constructor(list: ObjectInfo[]) { for (const o of list) this.objs.set(o.id, o); }
   err(message: string, b?: BlockState) { this.problems.push({ severity: 'error', message, blockId: b?.id }); }
   warn(message: string, b?: BlockState) { this.problems.push({ severity: 'warning', message, blockId: b?.id }); }
+  hasObjectNamed(n: string): boolean { for (const o of this.objs.values()) if (o.name === n) return true; return false; }
 
-  private varOf(b: BlockState, field: string) {
-    const f = b.fields?.[field] as { id?: string } | string | undefined;
-    const id = typeof f === 'string' ? f : f?.id;
-    return id ? this.byId.get(id) : undefined;
-  }
-  declare(b: BlockState, field: string, kind: Kind): string | null {
-    const v = this.varOf(b, field);
-    if (!v) { this.err('Pick a variable name for this block.', b); return null; }
-    const existing = this.kinds.get(v.py);
-    if (existing && existing !== kind) {
-      this.err(`"${v.name}" is used both as an object and as a number. Use a different name for one of them.`, b);
-      return null;
+  /** The object oval plugged into `input`: which object it is, and (for text) which characters. */
+  ref(b: BlockState, input: string): ObjRef | null {
+    const r = inputBlock(b, input);
+    if (!r || r.type !== 'obj_ref') { this.err('Put an object in the oval of this block.', b); return null; }
+    const id = r.fields?.TARGET;
+    if (typeof id !== 'string' || !id) { this.err('Choose an object in the oval of this block.', b); return null; }
+    const info = this.objs.get(id);
+    if (!info) { this.err('The object chosen here was deleted. Choose another one.', b); return null; }
+    if (!this.assigned.has(id)) {
+      this.err(`"${info.name}" doesn't exist yet. Put the block that creates it above this one.`, b); return null;
     }
-    this.kinds.set(v.py, kind);
-    return v.py;
-  }
-  useObj(b: BlockState, field: string): string | null {
-    const v = this.varOf(b, field);
-    if (!v) { this.err('Choose an object for this block.', b); return null; }
-    if (this.kinds.get(v.py) !== 'object' || !this.assigned.has(v.py)) {
-      this.err(`"${v.name}" doesn't exist yet. Put a "create ... as ${v.name}" block above this one.`, b);
-      return null;
+    const whole = this.texts.get(id);
+    const part = info.textual && (r.extraState as { part?: unknown } | undefined)?.part === true;
+    if (!part) return { info, code: info.name, text: info.textual ? whole : undefined };
+    if (whole === undefined) return null; // the text itself had a problem, already reported
+    const chars = Array.from(whole);
+    const read = (name: string, def: number, what: string): number | null => {
+      const raw = String(r.fields?.[name] ?? '').trim();
+      if (raw === '') return def;
+      if (!/^\d{1,6}$/.test(raw)) { this.err(`${what} must be a whole number (you typed "${raw}").`, b); return null; }
+      return Number(raw);
+    };
+    const from = read('FROM', 1, 'The first character'), to = read('TO', chars.length, 'The last character');
+    if (from === null || to === null) return null;
+    if (from < 1 || to > chars.length || from > to) {
+      this.err(`Choose characters from 1 to ${chars.length} of "${info.name}", with the first number not larger than the last.`, b); return null;
     }
-    return v.py;
+    // Text objects are made with ligatures off, so piece number n is exactly character n+1 (spaces included).
+    return { info, code: `${info.name}[${from - 1}:${to}]`, text: chars.slice(from - 1, to).join('') };
   }
-  useNumberVar(b: BlockState, field: string): string | null {
-    const v = this.varOf(b, field);
-    if (!v) { this.err('Pick a variable for this block.', b); return null; }
-    if (this.kinds.get(v.py) !== 'number' || !this.assigned.has(v.py)) {
-      this.err(`"${v.name}" has no number yet. Use "set ${v.name} to ..." above this block first.`, b);
-      return null;
+
+  /** The text a "create text" block shows: typed in its slot, or taken (all or part) from another text object. */
+  textValue(b: BlockState, input: string, what: string): string | null {
+    const r = inputBlock(b, input);
+    if (!r) { this.err(`${what} is empty.`, b); return null; }
+    if (r.type === 'obj_textval') {
+      const v = String(r.fields?.TEXT ?? '');
+      if (!v.trim()) { this.err(`${what} is empty.`, b); return null; }
+      return v;
     }
-    return v.py;
+    const x = this.ref(b, input);
+    if (!x) return null;
+    if (!x.info.textual || x.text === undefined) { this.err(`"${x.info.name}" is not a text object, so its text can't be used here.`, b); return null; }
+    return x.text;
   }
 
   /** Validates a number/formula typed by the user and returns safe Python. */
@@ -101,10 +103,7 @@ class Ctx {
       if (/^[\d.]/.test(t)) { toks[i] = t.replace(/^0+(?=\d)/, ''); continue; }
       if (/^[A-Za-z_]/.test(t)) {
         if (this.loops.includes(t)) continue;
-        const py = this.byName.get(t);
-        if (!py) return bad(`Unknown name "${t}"`);
-        if (this.kinds.get(py) !== 'number' || !this.assigned.has(py)) return bad(`"${t}" is not a number variable that has been set yet`);
-        toks[i] = py; continue;
+        return bad(`Unknown name "${t}" (only the counter of a "for each" block can be used as a name)`);
       }
       if (!'+-*/%()'.includes(t)) return bad(`Character "${t}" isn't allowed in numbers`);
     }
@@ -143,17 +142,16 @@ class Ctx {
 type B = BlockState;
 type Handler = (b: B, c: Ctx) => string[] | null;
 
-const create = (make: (b: B, c: Ctx) => string | null): Handler => (b, c) => {
-  const name = c.declare(b, 'VAR', 'object');
-  if (!name) return null;
-  const e = make(b, c);
-  if (e === null) return null;
-  c.assigned.add(name);
-  return [`${name} = ${e}`];
+const create = (make: (b: B, c: Ctx, info: ObjectInfo) => string | null): Handler => (b, c) => {
+  const info = b.id ? c.objs.get(b.id) : undefined;
+  if (!info) { c.err('This block could not be given a name. Try deleting it and adding it again.', b); return null; }
+  const e = make(b, c, info);
+  c.assigned.add(info.id); // even after a problem, so one mistake does not cause a chain of follow-up errors
+  return e === null ? null : [`${info.name} = ${e}`];
 };
 const prop = (make: (o: string, b: B, c: Ctx) => string): Handler => (b, c) => {
-  const o = c.useObj(b, 'OBJ');
-  return o ? [make(o, b, c)] : null;
+  const o = c.ref(b, 'OBJ');
+  return o ? [make(o.code, b, c)] : null;
 };
 const play = (make: (o: string, b: B, c: Ctx) => string): Handler =>
   prop((o, b, c) => `self.play(${make(o, b, c)}, run_time=_rt)`);
@@ -182,7 +180,12 @@ const compare = (b: B, c: Ctx): string => {
 
 const HANDLERS: Record<string, Handler> = {
   // Objects
-  obj_text: create((b, c) => { const t = c.str(b, 'TEXT', 'The text'); return t === null ? null : `Text(${pyStr(t)}, color=${c.color(b)})`; }),
+  obj_text: create((b, c, info) => {
+    const t = c.textValue(b, 'TEXT', 'The text');
+    if (t === null) return null;
+    c.texts.set(info.id, t);
+    return `Text(${pyStr(t)}, color=${c.color(b)}, disable_ligatures=True)`;
+  }),
   obj_mathtex: create((b, c) => { const t = c.str(b, 'TEX', 'The formula'); return t === null ? null : `MathTex(${pyStr(t)}, color=${c.color(b)})`; }),
   obj_circle: create((b, c) => `Circle(radius=${c.positive(b, 'R', 'Radius')}, color=${c.color(b)})`),
   obj_square: create((b, c) => `Square(side_length=${c.positive(b, 'SIDE', 'Side length')}, color=${c.color(b)})`),
@@ -195,7 +198,8 @@ const HANDLERS: Record<string, Handler> = {
 
   // Animations
   anim_add: prop((o) => `self.add(${o})`),
-  anim_write: simplePlay('Write'), anim_create: simplePlay('Create'),
+  // "draw" writes text and formulas stroke by stroke, and draws the outline of everything else.
+  anim_create: (b, c) => { const o = c.ref(b, 'OBJ'); return o ? [`self.play(${o.info.textual || o.info.formula ? 'Write' : 'Create'}(${o.code}), run_time=_rt)`] : null; },
   anim_fadein: simplePlay('FadeIn'), anim_fadeout: simplePlay('FadeOut'),
   anim_grow: simplePlay('GrowFromCenter'), anim_shrink: simplePlay('ShrinkToCenter'),
   anim_indicate: simplePlay('Indicate'), anim_circumscribe: simplePlay('Circumscribe'),
@@ -204,8 +208,8 @@ const HANDLERS: Record<string, Handler> = {
   anim_rotate: play((o, b, c) => `Rotate(${o}, angle=${c.num(b, 'ANGLE')} * DEGREES)`),
   anim_scale: play((o, b, c) => `${o}.animate.scale(${c.num(b, 'FACTOR')})`),
   anim_transform: (b, c) => {
-    const a = c.useObj(b, 'OBJ'), t = c.useObj(b, 'TARGET');
-    return a && t ? [`self.play(Transform(${a}, ${t}), run_time=_rt)`] : null;
+    const a = c.ref(b, 'OBJ'), t = c.ref(b, 'TARGET');
+    return a && t ? [`self.play(Transform(${a.code}, ${t.code}), run_time=_rt)`] : null;
   },
 
   // Properties
@@ -239,6 +243,7 @@ const HANDLERS: Record<string, Handler> = {
       c.err(`"${v}" can't be used as a counter name. Use letters/numbers, starting with a lowercase letter (like i).`, b); return null;
     }
     if (c.loops.includes(v)) { c.err(`"${v}" is already used by an outer loop.`, b); return null; }
+    if (c.hasObjectNamed(v)) { c.err(`"${v}" is the name of an object. Use another counter name.`, b); return null; }
     const from = c.num(b, 'FROM'), to = c.num(b, 'TO');
     c.loops.push(v);
     const inner = body(b, 'DO', c);
@@ -247,25 +252,12 @@ const HANDLERS: Record<string, Handler> = {
   },
   logic_if: (b, c) => { const cond = compare(b, c); return [`if ${cond}:`, ...body(b, 'DO', c)]; },
   logic_if_else: (b, c) => { const cond = compare(b, c); return [`if ${cond}:`, ...body(b, 'DO', c), 'else:', ...body(b, 'ELSE', c)]; },
-
-  // Number variables
-  var_set: (b, c) => {
-    const name = c.declare(b, 'VAR', 'number');
-    if (!name) return null;
-    const e = c.num(b, 'VALUE');
-    c.assigned.add(name);
-    return [`${name} = ${e}`];
-  },
-  var_change: (b, c) => {
-    const name = c.useNumberVar(b, 'VAR');
-    return name ? [`${name} += ${c.num(b, 'VALUE')}`] : null;
-  },
 };
 
 export const SUPPORTED_BLOCK_TYPES: string[] = ['scene_start', ...Object.keys(HANDLERS)];
 
 export function generate(state: WorkspaceState): GenerateResult {
-  const c = new Ctx(state.variables ?? []);
+  const c = new Ctx(listObjects(state));
   const tops = state.blocks?.blocks ?? [];
   const starts = tops.filter((b) => b.type === 'scene_start');
   if (tops.length && !starts.length) c.err('Add a "when animation starts" block and attach your blocks under it.', tops[0]);

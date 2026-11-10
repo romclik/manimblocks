@@ -5,7 +5,7 @@ import { mkdtempSync, writeFileSync, readFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { generate } from '../../src/codegen/generate';
-import { FULL, SAMPLE, prog, B, ref } from '../../src/codegen/fixtures';
+import { FULL, SAMPLE, prog, B, A, seq } from '../../src/codegen/fixtures';
 import { BLOCK_DEFINITIONS } from '../../src/blocks/definitions';
 
 const require = createRequire(import.meta.url);
@@ -39,13 +39,13 @@ describe.skipIf(!py)('scene safety validator (defense in depth)', () => {
   });
   it('FULL program really covers every block type except MathTex', () => {
     const used = new Set<string>();
-    const walk = (b: any) => { for (; b; b = b.next?.block) { used.add(b.type); for (const i of Object.values<any>(b.inputs ?? {})) walk(i.block); } };
+    const walk = (b: any) => { for (; b; b = b.next?.block) { used.add(b.type); for (const i of Object.values<any>(b.inputs ?? {})) { walk(i.block); walk(i.shadow); } } };
     for (const t of FULL.blocks!.blocks!) walk(t);
-    const missing = BLOCK_DEFINITIONS.map((d) => d.type).filter((t) => !used.has(t) && t !== 'obj_mathtex' && t !== 'logic_if');
+    const missing = BLOCK_DEFINITIONS.map((d) => d.type).filter((t) => !used.has(t) && !['obj_mathtex', 'logic_if'].includes(t));
     expect(missing).toEqual([]);
   });
   it('accepts MathTex programs (LaTeX is checked separately)', () => {
-    const code = generate(prog(B('obj_mathtex', { TEX: 'x^2', COLOR: 'WHITE', VAR: ref('f') }), [{ id: 'f', name: 'f' }])).code;
+    const code = generate(prog(B('obj_mathtex', { TEX: 'x^2', COLOR: 'WHITE' }, {}, 'f'))).code;
     expect(validate(code).ok).toBe(true);
   });
   it.each([
@@ -64,6 +64,13 @@ describe.skipIf(!py)('scene safety validator (defense in depth)', () => {
   ])('rejects %s', (_n, body) => {
     const v = validate(wrap(body));
     expect(v.ok, v.out).toBe(false);
+  });
+  it('allows a slice of an object (part of a text) but nothing cleverer', () => {
+    expect(validate(wrap('text1 = Text("hello", color=WHITE, disable_ligatures=True)\n        self.play(Write(text1[0:3]), run_time=_rt)')).ok).toBe(true);
+    for (const bad of ['text1[0:3:2]', 'text1[-1:3]', 'text1[0:len(x)]', 'text1[0:1.5]', 'text1[True:3]', 'text1[0]', 'text1[0:3][0:1]', 'RIGHT[0:1]']) {
+      const v = validate(wrap(`text1 = Text("hello", color=WHITE)\n        x = ${bad}`));
+      expect(v.ok, `${bad}: ${v.out}`).toBe(false);
+    }
   });
   it('rejects extra top-level code and a wrong class', () => {
     expect(validate(wrap('pass', 'from manim import *\nimport os\n')).ok).toBe(false);

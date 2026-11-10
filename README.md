@@ -2,12 +2,12 @@
 
 Build [Manim](https://www.manim.community/) animations by snapping blocks together (like Scratch). ManimBlocks turns your blocks into real Manim Community Edition Python code.
 
-## Current status (version 0.1.0, all planned features)
+## Current status (version 0.2.0)
 
 | Feature | Status |
 |---|---|
 | Desktop app (Electron + React + TypeScript) | Built and confirmed working on Windows by the author |
-| Block editor, 8 categories, ~45 blocks; code generation; Problems panel | Built, unit-tested; every block except MathTex rendered with real Manim |
+| Block editor, 6 categories, ~40 blocks (objects are named automatically: text1, circle2, ...; object ovals; always-visible or hover-only palette); code generation; Problems panel | Built, unit-tested; checked in a real Electron window and rendered with real Manim (except MathTex) |
 | Private Python 3.12 + Manim + FFmpeg install (no system install), folders of your choice, disk-space checks | Built; tested on Linux and by the **E2E** workflow on Windows |
 | Preview (quick) and Render (final) with progress, cancel, safety check, readable errors | Built, same testing |
 | In-app video player: play/pause/restart/seek/time/fullscreen | Built and confirmed working |
@@ -45,9 +45,9 @@ Other commands: `npm test` (tests), `npm run check` (type-check + tests + build,
 3. Click **Commit changes**. The **Actions** tab will start running **CI** automatically. A green check means the tests and build pass.
 
 ## Publish a release (installer)
-1. Check `version` in `package.json` (e.g. `0.1.0`).
-2. On GitHub: **Releases -> Draft a new release**. Create the tag `v0.1.0` (the letter `v` plus the same version). Write notes. Click **Publish release**.
-3. The **Release** workflow builds the installer (about 5 minutes) and attaches `ManimBlocks-Setup-0.1.0.exe` to that release. If the tag and `package.json` version differ, it stops with a clear message.
+1. Check `version` in `package.json` (e.g. `0.2.0`).
+2. On GitHub: **Releases -> Draft a new release**. Create the tag `v0.2.0` (the letter `v` plus the same version). Write notes. Click **Publish release**.
+3. The **Release** workflow builds the installer (about 5 minutes) and attaches `ManimBlocks-Setup-0.2.0.exe` to that release. If the tag and `package.json` version differ, it stops with a clear message.
 
 For the next version: raise `version` in `package.json`, commit, then repeat step 2 with the new tag.
 
@@ -62,7 +62,7 @@ The installer is an NSIS wizard (it also registers `.manimblocks` files) with an
 - `.github/workflows/` CI and release automation
 
 ## Security notes
-Users never type Python. Numbers are parsed by a small validator, colors come from a fixed list, text is escaped and variable names are sanitized before reaching generated code. Tests try to inject code through every field type.
+Users never type Python. Numbers are parsed by a small validator, colors come from a fixed list, text is escaped and objects get automatic safe names (text1, circle2, ...) before reaching generated code. Tests try to inject code through every field type.
 
 ## License
 MIT, see `LICENSE`.
@@ -73,7 +73,7 @@ The app ships a small tool called [`uv`](https://github.com/astral-sh/uv) (downl
 ## Automatic updates (how to publish and test them)
 The app checks GitHub Releases about 15 seconds after start and every 6 hours (switch off in Settings). When a newer version exists it shows a bar with **Download**, **Release notes** and **Remind me later**. Nothing is downloaded until you click Download, and nothing is installed until you click **Install and restart** and confirm. Downloads are verified with the SHA-512 checksum in `latest.yml`. Updates reinstall into the same folder you chose. (Releases are unsigned, so there is no publisher-signature check until you add a code-signing certificate.)
 
-To test it: install `0.1.0` from a release, raise `version` in `package.json` to `0.1.1`, commit, publish a release with tag `v0.1.1`, wait for the Release workflow, then open the installed 0.1.0 app and use Settings > Check for updates.
+To test it: install `0.2.0` from a release, raise `version` in `package.json` to `0.2.1`, commit, publish a release with tag `v0.2.1`, wait for the Release workflow, then open the installed 0.2.0 app and use Settings > Check for updates.
 
 ## Test installers without publishing
 The **Build installer (test build)** workflow builds the installer on every push. Open the run in the Actions tab and download it under **Artifacts**.

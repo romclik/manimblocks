@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import * as Blockly from 'blockly';
 import { BLOCK_DEFINITIONS } from '../blocks/definitions';
+import { afterWorkspaceReplaced } from '../blocks/sync';
 import { parseProject, serializeProject } from './project';
 import type { DialogSpec } from '../components/ConfirmDialog';
 import type { WorkspaceState } from '../codegen/generate';
@@ -63,7 +64,7 @@ export function useProject({ getWs, state, setState, ready, say }: Args) {
   const load = (workspace: object) => {
     const ws = getWs()!;
     Blockly.Events.disable();
-    try { ws.clear(); Blockly.serialization.workspaces.load(workspace as never, ws); } finally { Blockly.Events.enable(); }
+    try { ws.clear(); Blockly.serialization.workspaces.load(workspace as never, ws); afterWorkspaceReplaced(ws); } finally { Blockly.Events.enable(); }
     ws.clearUndo();
     const s = snapshot();
     setState(s);
@@ -73,7 +74,7 @@ export function useProject({ getWs, state, setState, ready, say }: Args) {
   const newProject = useCallback(async () => {
     if (needDesktop() || !(await confirmDiscard())) return;
     const ws = getWs()!;
-    Blockly.Events.disable(); try { ws.clear(); } finally { Blockly.Events.enable(); }
+    Blockly.Events.disable(); try { ws.clear(); afterWorkspaceReplaced(ws); } finally { Blockly.Events.enable(); }
     ws.clearUndo();
     await api!.newProject();
     const s = snapshot(); setState(s); setBaseline(JSON.stringify(s)); setName('Untitled'); setPath(null);

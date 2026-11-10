@@ -2,7 +2,7 @@
 const fs = require('fs');
 const path = require('path');
 
-const DEFAULTS = { theme: 'dark', previewQuality: 'l', renderQuality: 'm', fps: 0, exportDir: '', autoUpdate: true, remindUntil: 0, remindVersion: '' };
+const DEFAULTS = { theme: 'dark', previewQuality: 'l', renderQuality: 'm', fps: 0, exportDir: '', paletteAutoHide: false, autoUpdate: true, remindUntil: 0, remindVersion: '' };
 
 function sanitize(o) {
   const p = { ...DEFAULTS };
@@ -12,6 +12,7 @@ function sanitize(o) {
   if (['l', 'm', 'h'].includes(o.renderQuality)) p.renderQuality = o.renderQuality;
   if (Number.isInteger(o.fps) && o.fps >= 0 && o.fps <= 120) p.fps = o.fps;
   if (typeof o.exportDir === 'string' && (o.exportDir === '' || path.isAbsolute(o.exportDir))) p.exportDir = o.exportDir;
+  if (typeof o.paletteAutoHide === 'boolean') p.paletteAutoHide = o.paletteAutoHide;
   if (typeof o.autoUpdate === 'boolean') p.autoUpdate = o.autoUpdate;
   if (Number.isFinite(o.remindUntil) && o.remindUntil >= 0) p.remindUntil = o.remindUntil;
   if (typeof o.remindVersion === 'string' && o.remindVersion.length <= 40) p.remindVersion = o.remindVersion;
