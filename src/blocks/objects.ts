@@ -34,6 +34,9 @@ export interface ObjectInfo {
   text?: string;
 }
 
+/** Does this object oval use only part of a text? (The oval keeps this as a hidden checkbox field; older files kept it in extraState.) */
+export const usesPart = (r: BlockState): boolean => r.fields?.PART === true || (r.extraState as { part?: unknown } | undefined)?.part === true;
+
 /**
  * Which characters of a text a "part" selection covers. The value is "from-to" (1-based, both included);
  * empty means the whole text.
@@ -101,7 +104,7 @@ export function listObjects(state: WorkspaceState): ObjectInfo[] {
     if (r?.type !== 'obj_ref') return undefined;
     const src = texts.get(String(r.fields?.TARGET ?? ''));
     if (src === undefined) return undefined;
-    if ((r.extraState as { part?: unknown } | undefined)?.part !== true) return src;
+    if (!usesPart(r)) return src;
     const chars = Array.from(src);
     const range = readRange(r.fields?.RANGE, chars.length);
     return 'error' in range ? undefined : chars.slice(range.from - 1, range.to).join('');

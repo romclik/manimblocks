@@ -62,10 +62,10 @@ export function setupHoverHighlight(ws: Blockly.WorkspaceSvg, host: HTMLElement)
     const block = id ? ws.getBlockById(id) : null;
     if (!block || block.type !== 'obj_ref') { clearHighlight(); return; }
     const target = String(block.getFieldValue('TARGET') ?? '');
-    const rangeField = block.getField('RANGE');
-    const onRange = !!rangeField && !!t && !!(rangeField as Blockly.Field).getSvgRoot()?.contains(t);
-    highlightObject(ws, target, onRange);
-    if (onRange) showPartPreview((rangeField as Blockly.Field).getSvgRoot()!, target, String(rangeField!.getValue() ?? ''));
+    const partUsed = !!findObject(target)?.textual && block.getFieldValue('PART') === 'TRUE';
+    highlightObject(ws, target, partUsed);
+    const field = block.getField('TARGET') as Blockly.Field | null;
+    if (partUsed && field?.getSvgRoot()) showPartPreview(field.getSvgRoot()!, target, String(block.getFieldValue('RANGE') ?? ''));
   };
   const out = (e: PointerEvent) => {
     const to = e.relatedTarget as Element | null;

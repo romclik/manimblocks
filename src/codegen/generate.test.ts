@@ -156,9 +156,13 @@ describe('object ovals', () => {
     const whole = prog(seq(text('t', 'Hello'), B('anim_indicate', {}, { OBJ: { block: { type: 'obj_ref', fields: { TARGET: 't', RANGE: '2-3' } } } })));
     expect(generate(whole).code).toContain('Indicate(text1)'); // "part" is not ticked, so the whole text is used
   });
-  it('an empty part means the whole text', () => {
+  it('a ticked part with no characters chosen means the whole text', () => {
     const s = prog(seq(text('t', 'Hello'), B('anim_indicate', {}, { OBJ: O('t', '') })));
-    expect(generate(s).code).toContain('Indicate(text1)'); // empty: no part ticked in effect
+    expect(generate(s).code).toContain('Indicate(text1[0:5])');
+  });
+  it('older projects that kept the part flag in extraState still work', () => {
+    const old = { block: { type: 'obj_ref', fields: { TARGET: 't', RANGE: '2-3' }, extraState: { part: true } } } as never;
+    expect(generate(prog(seq(text('t', 'Hello'), B('anim_indicate', {}, { OBJ: old })))).code).toContain('Indicate(text1[1:3])');
   });
   it('rejects bad character ranges', () => {
     const s = (part: string) => prog(seq(text('t', 'Hello'), B('anim_indicate', {}, { OBJ: O('t', part) })));
@@ -266,32 +270,35 @@ describe('editor behaviour (headless Blockly)', () => {
     expect(generate(Blockly.serialization.workspaces.save(ws) as WorkspaceState).code).toContain('FadeIn(text1)');
     ws.dispose();
   });
-  it('the part controls appear only for text objects, and are saved with the block', () => {
+  it('an oval stays small: it shows the chosen part of a text, and keeps the controls hidden but saved', () => {
     const ws = load(prog(seq(text('t', 'Hello'), circle('c'), B('anim_indicate', {}, { OBJ: O('t', [2, 4]) }), A('anim_indicate', 'c'))));
     syncObjects(ws);
     const refs = ws.getBlocksByType('obj_ref', true);
     const forText = refs.find((b) => b.getFieldValue('TARGET') === 't')!, forShape = refs.find((b) => b.getFieldValue('TARGET') === 'c')!;
-    expect(forText.getField('PART')).toBeTruthy();
+    expect(forText.getField('PART')!.isVisible()).toBe(false);
+    expect(forText.getField('RANGE')!.isVisible()).toBe(false);
     expect(forText.getFieldValue('RANGE')).toBe('2-4');
-    expect(forShape.getField('PART')).toBeNull();
-    const saved = Blockly.serialization.workspaces.save(ws) as WorkspaceState;
-    expect(generate(saved).code).toContain('Indicate(text1[1:4])');
-    // untick part: the characters are no longer used
-    (forText.getField('PART') as Blockly.FieldCheckbox).setValue('FALSE');
-    expect(forText.getField('RANGE')).toBeNull();
+    expect(forText.getField('TARGET')!.getText()).toBe('text1 “ell”');
+    expect(forShape.getField('TARGET')!.getText()).toBe('circle1');
+    expect(generate(Blockly.serialization.workspaces.save(ws) as WorkspaceState).code).toContain('Indicate(text1[1:4])');
+    // not using part any more: the whole text again
+    forText.getField('PART')!.setValue('FALSE');
+    syncObjects(ws);
+    expect(forText.getField('TARGET')!.getText()).toBe('text1');
     expect(generate(Blockly.serialization.workspaces.save(ws) as WorkspaceState).code).toContain('Indicate(text1)');
     ws.dispose();
   });
-  it('shows text parts when ticking the box on a fresh oval', () => {
+  it('choosing a part on a fresh oval', () => {
     const ws = load(prog(seq(text('t', 'Hello'), A('anim_indicate', 't'))));
     syncObjects(ws);
     const r = ws.getBlocksByType('obj_ref', true)[0];
-    expect(r.getField('PART')).toBeTruthy();
-    expect(r.getField('RANGE')).toBeNull();
-    (r.getField('PART') as Blockly.FieldCheckbox).setValue('TRUE');
-    expect(r.getField('RANGE')).toBeTruthy();
+    expect(generate(Blockly.serialization.workspaces.save(ws) as WorkspaceState).code).toContain('Indicate(text1)');
+    r.getField('PART')!.setValue('TRUE');
     r.setFieldValue('2-4', 'RANGE');
     expect(generate(Blockly.serialization.workspaces.save(ws) as WorkspaceState).code).toContain('Indicate(text1[1:4])');
+    expect(r.getField('RANGE')!.getValue()).toBe('2-4');
+    r.setFieldValue('banana', 'RANGE'); // not a range: refused, the old value stays
+    expect(r.getField('RANGE')!.getValue()).toBe('2-4');
     ws.dispose();
   });
   it('the start block is added automatically, cannot be deleted, and is never duplicated', () => {

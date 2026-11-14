@@ -3,7 +3,7 @@
 // Security: users never type Python. Every value is validated (numbers/formulas, whitelisted
 // colors, escaped strings, sanitized identifiers) before it can reach the generated code.
 import { COLOR_VALUES } from '../blocks/colors';
-import { listObjects, inputBlock, readRange, type ObjectInfo } from '../blocks/objects';
+import { listObjects, inputBlock, readRange, usesPart, type ObjectInfo } from '../blocks/objects';
 
 export interface BlockState {
   type: string; id?: string;
@@ -51,7 +51,7 @@ class Ctx {
       this.err(`"${info.name}" doesn't exist yet. Put the block that creates it above this one.`, b); return null;
     }
     const whole = this.texts.get(id);
-    const part = info.textual && (r.extraState as { part?: unknown } | undefined)?.part === true;
+    const part = info.textual && usesPart(r);
     if (!part) return { info, code: info.name, text: info.textual ? whole : undefined };
     if (whole === undefined) return null; // the text itself had a problem, already reported
     const chars = Array.from(whole);

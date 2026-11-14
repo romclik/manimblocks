@@ -9,7 +9,7 @@ export const prog = (first: BlockState): WorkspaceState => ({ blocks: { blocks: 
 
 /** An object oval (plugged in or shadow) pointing at the object created by block `id`; `part` picks characters from..to of a text. */
 export const O = (id: string, part?: [number | string, number | string] | string) => ({
-  block: { type: 'obj_ref', fields: { TARGET: id, ...(part ? { RANGE: typeof part === 'string' ? part : `${part[0]}-${part[1]}` } : {}) }, ...(part ? { extraState: { part: true } } : {}) } as BlockState,
+  block: { type: 'obj_ref', fields: { TARGET: id, ...(part !== undefined ? { PART: true, RANGE: typeof part === 'string' ? part : `${part[0]}-${part[1]}` } : {}) } } as BlockState,
 });
 /** Typed text in a "create text" slot. */
 export const T = (text: string) => ({ shadow: { type: 'obj_textval', fields: { TEXT: text } } as BlockState });

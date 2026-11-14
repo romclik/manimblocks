@@ -23,9 +23,10 @@ export function parseProject(text: string, knownTypes: ReadonlySet<string>): Par
   const ws = o.workspace as Record<string, unknown> | null;
   if (!ws || typeof ws !== 'object' || Array.isArray(ws)) return { ok: false, error: 'The file is damaged: the workspace is missing.' };
 
-  // Format 2 stored a text part as two fields (FROM, TO); format 3 stores one range "from-to".
+  // Format 2 stored a text part as two fields (FROM, TO); format 3 stores one range "from-to". The "part" flag used to live in extraState.
   const upgrade = (first: unknown, depth: number): void => {
     for (let b = first as Record<string, any> | undefined; b && typeof b === 'object' && depth < MAX_DEPTH; b = b.next?.block) {
+      if (b.type === 'obj_ref' && b.fields && typeof b.fields === 'object' && b.extraState?.part === true) b.fields.PART = true;
       if (b.type === 'obj_ref' && b.fields && typeof b.fields === 'object' && ('FROM' in b.fields || 'TO' in b.fields)) {
         const from = String(b.fields.FROM ?? '').trim(), to = String(b.fields.TO ?? '').trim();
         b.fields.RANGE = /^\d+$/.test(from) && /^\d+$/.test(to) ? `${from}-${to}` : '';
@@ -34,7 +35,7 @@ export function parseProject(text: string, knownTypes: ReadonlySet<string>): Par
       if (b.inputs && typeof b.inputs === 'object') for (const inp of Object.values<any>(b.inputs)) { upgrade(inp?.block, depth + 1); upgrade(inp?.shadow, depth + 1); }
     }
   };
-  if (o.version === 2 && Array.isArray((ws.blocks as { blocks?: unknown } | undefined)?.blocks)) for (const top of (ws.blocks as { blocks: unknown[] }).blocks) upgrade(top, 0);
+  if (o.version <= 3 && Array.isArray((ws.blocks as { blocks?: unknown } | undefined)?.blocks)) for (const top of (ws.blocks as { blocks: unknown[] }).blocks) upgrade(top, 0);
 
   const unknown = new Set<string>();
   let count = 0, bad = '';

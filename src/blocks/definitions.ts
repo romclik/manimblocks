@@ -45,9 +45,9 @@ export const BLOCK_DEFINITIONS = [
     tooltip: 'Everything attached under this block becomes your animation. This block is always here.' },
 
   // ---- Object references (round ovals)
-  { type: 'obj_ref', message0: '%1 %2', args0: [{ type: 'field_manim_object', name: 'TARGET' }, { type: 'input_dummy', name: 'MAIN' }], output: 'Object', colour: CATEGORY_COLOURS.objects, inputsInline: true,
+  { type: 'obj_ref', message0: '%1 %2 %3', args0: [{ type: 'field_manim_object', name: 'TARGET' }, { type: 'field_checkbox', name: 'PART', checked: false }, { type: 'field_manim_range', name: 'RANGE' }], output: 'Object', colour: CATEGORY_COLOURS.objects, inputsInline: true,
     mutator: 'manim_obj_ref',
-    tooltip: 'Pick an object. For a text object, tick "part" and drag across its characters to use only those.' },
+    tooltip: 'Pick an object. For a text object, the list also lets you use only part of its characters.' },
   { type: 'obj_textval', message0: '%1', args0: [text('TEXT', 'Hello Manim')], output: 'String', outputShape: 3, colour: CATEGORY_COLOURS.objects,
     tooltip: 'Type some text here.' },
 
@@ -102,45 +102,29 @@ export const BLOCK_DEFINITIONS = [
   c('logic_if_else', 'logic', 'if %1 %2 %3', [text('A', 'i'), cmp('OP'), text('B', '2')], 'Runs the first part if true, otherwise the "else" part.', true),
 ];
 
-// The object oval: a dropdown of objects plus, for text objects, an optional "part" (characters from-to).
-interface RefBlock extends Blockly.Block { part_: boolean; textual_: boolean; updateShape_(): void; recolour_(): void }
+// The object oval: one dropdown. For text objects its list also holds the "part of the text" controls; the choice
+// is kept in two hidden fields (PART, RANGE) so the oval itself stays small.
+interface RefBlock extends Blockly.Block { recolour_(): void }
 const REF_MIXIN = {
-  part_: false,
-  textual_: false,
-  saveExtraState(this: RefBlock) { return this.part_ ? { part: true } : null; },
-  loadExtraState(this: RefBlock, state: { part?: boolean } | null) { this.part_ = !!state?.part; this.updateShape_(); },
+  // Older projects kept the "part" flag here; it is now the hidden PART field.
+  saveExtraState() { return null; },
+  loadExtraState() { /* nothing to restore */ },
   /** An oval that is already built into a block takes that block's color; one dragged out of the palette keeps the object color. */
   recolour_(this: RefBlock) {
     const parent = this.getParent();
     const colour = this.isShadow() && parent ? parent.getColour() : CATEGORY_COLOURS.objects;
     if (this.getColour() !== colour) this.setColour(colour);
   },
-  /** Shows or hides the "part" controls. Called when the object list changes or the choice changes. */
+  /** Called when the object list changes: refresh the shown name, the shown part of the text and the color. */
   sync(this: RefBlock) {
     this.recolour_();
-    const f = this.getField('TARGET') as FieldObject | null;
-    const info = findObject(String(f?.getValue() ?? ''));
-    this.textual_ = !!info?.textual;
-    this.updateShape_();
-    f?.forceRerender();
-  },
-  updateShape_(this: RefBlock) {
-    const input = this.getInput('MAIN');
-    if (!input) return;
-    const has = (n: string) => input.fieldRow.some((f) => f.name === n);
-    const want = this.textual_ || this.part_;
-    if (!want) {
-      for (const n of ['PART', 'L_PART', 'RANGE']) if (has(n)) input.removeField(n, true);
-      return;
-    }
-    if (!has('PART')) {
-      input.appendField(new Blockly.FieldCheckbox(this.part_ ? 'TRUE' : 'FALSE', (v) => { this.part_ = v === true || v === 'TRUE'; this.updateShape_(); return v; }), 'PART');
-      input.appendField(new Blockly.FieldLabel('part'), 'L_PART');
-    }
-    if (this.part_ && !has('RANGE')) input.appendField(new FieldTextRange() as never, 'RANGE');
-    else if (!this.part_ && has('RANGE')) input.removeField('RANGE', true);
+    (this.getField('TARGET') as FieldObject | null)?.forceRerender();
   },
 };
+function hideRefState(this: Blockly.Block) {
+  this.getField('PART')?.setVisible(false);
+  this.getField('RANGE')?.setVisible(false);
+}
 
 let registered = false;
 export function registerBlocks(): void {
@@ -148,6 +132,6 @@ export function registerBlocks(): void {
   registered = true;
   Blockly.fieldRegistry.register('field_manim_object', FieldObject as unknown as Blockly.fieldRegistry.RegistrableField);
   Blockly.fieldRegistry.register('field_manim_range', FieldTextRange as unknown as Blockly.fieldRegistry.RegistrableField);
-  Blockly.Extensions.registerMutator('manim_obj_ref', REF_MIXIN);
+  Blockly.Extensions.registerMutator('manim_obj_ref', REF_MIXIN, hideRefState);
   Blockly.common.defineBlocksWithJsonArray(BLOCK_DEFINITIONS as unknown as object[]);
 }

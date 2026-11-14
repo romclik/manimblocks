@@ -14,7 +14,7 @@ describe('project files', () => {
     const r = parseProject(wrap(v2, { version: 2 }), known) as { ok: boolean; workspace: any };
     expect(r.ok).toBe(true);
     const ref = r.workspace.blocks.blocks[0].next.block.inputs.OBJ.shadow;
-    expect(ref.fields).toEqual({ TARGET: 'x', RANGE: '2-4' });
+    expect(ref.fields).toEqual({ TARGET: 'x', PART: true, RANGE: '2-4' });
     const blank = { blocks: { blocks: [{ type: 'obj_ref', fields: { TARGET: 'x', FROM: '', TO: '3' } }] } };
     expect((parseProject(wrap(blank, { version: 2 }), known) as any).workspace.blocks.blocks[0].fields.RANGE).toBe('');
   });
