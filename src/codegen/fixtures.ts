@@ -8,8 +8,8 @@ export const seq = (...bs: BlockState[]): BlockState => { for (let i = 0; i < bs
 export const prog = (first: BlockState): WorkspaceState => ({ blocks: { blocks: [{ type: 'scene_start', next: { block: first } }] } });
 
 /** An object oval (plugged in or shadow) pointing at the object created by block `id`; `part` picks characters from..to of a text. */
-export const O = (id: string, part?: [number | string, number | string]) => ({
-  block: { type: 'obj_ref', fields: { TARGET: id, ...(part ? { FROM: String(part[0]), TO: String(part[1]) } : {}) }, ...(part ? { extraState: { part: true } } : {}) } as BlockState,
+export const O = (id: string, part?: [number | string, number | string] | string) => ({
+  block: { type: 'obj_ref', fields: { TARGET: id, ...(part ? { RANGE: typeof part === 'string' ? part : `${part[0]}-${part[1]}` } : {}) }, ...(part ? { extraState: { part: true } } : {}) } as BlockState,
 });
 /** Typed text in a "create text" slot. */
 export const T = (text: string) => ({ shadow: { type: 'obj_textval', fields: { TEXT: text } } as BlockState });

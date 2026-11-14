@@ -78,6 +78,9 @@ export function SettingsDialog({ info, prefs, update, onPrefs, onClose, onSetup,
         <div className="form"><label>Check automatically</label>
           <input type="checkbox" checked={prefs.autoUpdate} onChange={(e) => onPrefs({ autoUpdate: e.target.checked })} />
           <span className="hint2">Looks at GitHub Releases now and then. Nothing is ever downloaded or installed without your permission.</span></div>
+        <div className="form"><label>Include pre-releases</label>
+          <input type="checkbox" checked={prefs.updatePrereleases} onChange={(e) => onPrefs({ updatePrereleases: e.target.checked })} />
+          <span className="hint2">Also offer test versions marked "pre-release" on GitHub. They may have bugs. Takes effect at the next check.</span></div>
         <div className="actions left"><button onClick={onCheckUpdates} disabled={update.status === 'checking' || update.status === 'downloading'}>Check for updates</button><span className="small dim">{updText}</span></div>
 
         <h3>About</h3>

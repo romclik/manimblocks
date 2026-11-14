@@ -3,10 +3,25 @@
 const HOUR = 3600 * 1000;
 const NOTES_URL = (repo, v) => `https://github.com/${repo}/releases/tag/v${v}`;
 
-const parse = (v) => String(v).replace(/^v/, '').split('-')[0].split('.').map((n) => parseInt(n, 10) || 0);
+// Semantic-version comparison. A pre-release (0.3.0-beta.2) is older than its release (0.3.0).
+const parse = (v) => {
+  const [core, ...rest] = String(v).replace(/^v/, '').split('+')[0].split('-');
+  return { nums: core.split('.').map((n) => parseInt(n, 10) || 0), pre: rest.length ? rest.join('-').split('.') : [] };
+};
 function isNewer(a, b) {
   const x = parse(a), y = parse(b);
-  for (let i = 0; i < Math.max(x.length, y.length, 3); i++) { if ((x[i] || 0) !== (y[i] || 0)) return (x[i] || 0) > (y[i] || 0); }
+  for (let i = 0; i < Math.max(x.nums.length, y.nums.length, 3); i++) { if ((x.nums[i] || 0) !== (y.nums[i] || 0)) return (x.nums[i] || 0) > (y.nums[i] || 0); }
+  if (!x.pre.length || !y.pre.length) return !x.pre.length && y.pre.length > 0; // release beats pre-release; two releases are equal
+  for (let i = 0; i < Math.max(x.pre.length, y.pre.length); i++) {
+    const p = x.pre[i], q = y.pre[i];
+    if (p === undefined) return false;
+    if (q === undefined) return true;
+    if (p === q) continue;
+    const pn = /^\d+$/.test(p), qn = /^\d+$/.test(q);
+    if (pn && qn) return Number(p) > Number(q);
+    if (pn !== qn) return qn; // numbers sort before words
+    return p > q;
+  }
   return false;
 }
 
@@ -55,6 +70,7 @@ function createUpdater({ autoUpdater, getPrefs, setPrefs, currentVersion, isPack
       if (!isPackaged) { if (manual) set({ status: 'unsupported', error: 'Updates only work in the installed app, not in a development copy.' }); return state; }
       if (['checking', 'downloading', 'downloaded'].includes(state.status)) return state;
       const prefs = getPrefs();
+      autoUpdater.allowPrerelease = prefs.updatePrereleases === true; // off by default: only stable releases
       if (!manual && (!prefs.autoUpdate || now() < prefs.remindUntil)) return state;
       set({ status: 'checking' });
       try { await autoUpdater.checkForUpdates(); } catch (err) { set({ status: 'error', error: friendly(err) }); }

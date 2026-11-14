@@ -11,7 +11,7 @@ import { generate, type WorkspaceState } from './codegen/generate';
 import { copyText, saveTextFile } from './lib/files';
 
 const QUALITY_LABEL: Record<Quality, string> = { l: 'Low (480p, 15 fps)', m: 'Medium (720p, 30 fps)', h: 'High (1080p, 60 fps)' };
-const DEFAULT_PREFS: Prefs = { theme: 'dark', previewQuality: 'l', renderQuality: 'm', fps: 0, exportDir: '', paletteAutoHide: false, autoUpdate: true, remindUntil: 0, remindVersion: '' };
+const DEFAULT_PREFS: Prefs = { theme: 'dark', previewQuality: 'l', renderQuality: 'm', fps: 0, exportDir: '', paletteAutoHide: false, autoUpdate: true, updatePrereleases: false, remindUntil: 0, remindVersion: '' };
 
 export default function App() {
   const api = window.manimBlocks;

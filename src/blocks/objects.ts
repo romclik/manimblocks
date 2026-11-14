@@ -30,6 +30,22 @@ export interface ObjectInfo {
   formula: boolean;
   /** Short human description, shown when pointing at the object in a list. */
   description: string;
+  /** The characters of a text object (when they can be worked out), used by the character selector. */
+  text?: string;
+}
+
+/**
+ * Which characters of a text a "part" selection covers. The value is "from-to" (1-based, both included);
+ * empty means the whole text.
+ */
+export function readRange(raw: unknown, length: number): { from: number; to: number } | { error: string } {
+  const s = String(raw ?? '').trim();
+  if (s === '') return { from: 1, to: length };
+  const m = /^(\d{1,6})-(\d{1,6})$/.exec(s);
+  if (!m) return { error: 'The characters chosen here are not valid. Select them again.' };
+  const from = Number(m[1]), to = Number(m[2]);
+  if (from < 1 || from > to || to > length) return { error: `The characters chosen here no longer fit the text (it has ${length} characters). Select them again.` };
+  return { from, to };
 }
 
 const short = (s: string, n = 40) => { const t = s.replace(/\s+/g, ' ').trim(); return t.length > n ? t.slice(0, n - 1) + '…' : t; };
@@ -76,7 +92,20 @@ export function listObjects(state: WorkspaceState): ObjectInfo[] {
   const counts = new Map<string, number>();
   const out: ObjectInfo[] = [];
   const names = new Map<string, string>();
+  const texts = new Map<string, string>();
   let anon = 0;
+  /** The text a text object shows: typed in its slot, or taken (all or part) from an earlier text object. */
+  const textOf = (b: BlockState): string | undefined => {
+    const r = inputBlock(b, 'TEXT');
+    if (r?.type === 'obj_textval') return String(r.fields?.TEXT ?? '');
+    if (r?.type !== 'obj_ref') return undefined;
+    const src = texts.get(String(r.fields?.TARGET ?? ''));
+    if (src === undefined) return undefined;
+    if ((r.extraState as { part?: unknown } | undefined)?.part !== true) return src;
+    const chars = Array.from(src);
+    const range = readRange(r.fields?.RANGE, chars.length);
+    return 'error' in range ? undefined : chars.slice(range.from - 1, range.to).join('');
+  };
   for (const top of ordered) {
     for (const b of walk(top)) {
       const kind = OBJECT_KINDS[b.type];
@@ -86,7 +115,9 @@ export function listObjects(state: WorkspaceState): ObjectInfo[] {
       const id = b.id ?? `~${anon++}`;
       const name = kind.prefix + n;
       names.set(id, name);
-      out.push({ id, type: b.type, name, textual: !!kind.textual, formula: !!kind.formula, description: '' });
+      const text = kind.textual ? textOf(b) : undefined;
+      if (text !== undefined) texts.set(id, text);
+      out.push({ id, type: b.type, name, textual: !!kind.textual, formula: !!kind.formula, description: '', text });
     }
   }
   // Descriptions need names of other objects (text copied from text1), so they are filled in afterwards.

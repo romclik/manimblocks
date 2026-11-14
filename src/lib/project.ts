@@ -2,7 +2,7 @@
 import { version } from '../../package.json';
 
 export const PROJECT_FORMAT = 'manimblocks-project';
-export const PROJECT_VERSION = 2;
+export const PROJECT_VERSION = 3;
 const MAX_BLOCKS = 20000;
 const MAX_DEPTH = 300;
 
@@ -18,10 +18,23 @@ export function parseProject(text: string, knownTypes: ReadonlySet<string>): Par
   const o = data as Record<string, unknown> | null;
   if (!o || typeof o !== 'object' || o.format !== PROJECT_FORMAT) return { ok: false, error: 'This is not a ManimBlocks project file.' };
   if (typeof o.version !== 'number' || !Number.isInteger(o.version) || o.version < 1) return { ok: false, error: 'The file is damaged: its version number is invalid.' };
-  if (o.version < PROJECT_VERSION) return { ok: false, error: 'This project was saved by an older test version of ManimBlocks, which named objects differently, so it cannot be opened. Recreate it with the new blocks.' };
+  if (o.version < 2) return { ok: false, error: 'This project was saved by an older test version of ManimBlocks, which named objects differently, so it cannot be opened. Recreate it with the new blocks.' };
   if (o.version > PROJECT_VERSION) return { ok: false, error: 'This project was saved by a newer version of ManimBlocks. Update ManimBlocks to open it.' };
   const ws = o.workspace as Record<string, unknown> | null;
   if (!ws || typeof ws !== 'object' || Array.isArray(ws)) return { ok: false, error: 'The file is damaged: the workspace is missing.' };
+
+  // Format 2 stored a text part as two fields (FROM, TO); format 3 stores one range "from-to".
+  const upgrade = (first: unknown, depth: number): void => {
+    for (let b = first as Record<string, any> | undefined; b && typeof b === 'object' && depth < MAX_DEPTH; b = b.next?.block) {
+      if (b.type === 'obj_ref' && b.fields && typeof b.fields === 'object' && ('FROM' in b.fields || 'TO' in b.fields)) {
+        const from = String(b.fields.FROM ?? '').trim(), to = String(b.fields.TO ?? '').trim();
+        b.fields.RANGE = /^\d+$/.test(from) && /^\d+$/.test(to) ? `${from}-${to}` : '';
+        delete b.fields.FROM; delete b.fields.TO;
+      }
+      if (b.inputs && typeof b.inputs === 'object') for (const inp of Object.values<any>(b.inputs)) { upgrade(inp?.block, depth + 1); upgrade(inp?.shadow, depth + 1); }
+    }
+  };
+  if (o.version === 2 && Array.isArray((ws.blocks as { blocks?: unknown } | undefined)?.blocks)) for (const top of (ws.blocks as { blocks: unknown[] }).blocks) upgrade(top, 0);
 
   const unknown = new Set<string>();
   let count = 0, bad = '';

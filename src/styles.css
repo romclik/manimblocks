@@ -76,3 +76,23 @@ code { background: #120f1a; padding: 1px 5px; border-radius: 4px; }
 :root[data-theme='light'] .toolbar button:hover:not(:disabled) { background: #ddd5f3; } :root[data-theme='light'] .menu li:hover { background: #ddd5f3; }
 
 .vbtns { display: flex; gap: 8px; margin-bottom: 8px; } .vbtns button { background: var(--panel2); color: var(--text); border: 1px solid var(--line); border-radius: 8px; padding: 5px 11px; cursor: pointer; }
+
+/* ---- Hover highlight of the block an object oval points at ---- */
+.mb-hl { filter: drop-shadow(0 0 6px #ffffff) drop-shadow(0 0 2px #ffffff); }
+.mb-hl > .blocklyPath { stroke: #ffffff; stroke-width: 3px; }
+.mb-hl-field { filter: drop-shadow(0 0 5px #ffd84d) drop-shadow(0 0 2px #ffd84d); }
+.mb-hl-field > .blocklyPath { stroke: #ffd84d; stroke-width: 3px; }
+.mb-preview { position: fixed; z-index: 100000; pointer-events: none; padding: 6px 10px; max-width: 380px; background: #1c1828; color: #e9e4f7; border: 1px solid #7c5cff; border-radius: 8px; font: 600 15px 'Segoe UI', system-ui, sans-serif; box-shadow: 0 4px 16px rgba(0,0,0,.4); }
+.mb-preview span { opacity: .45; }
+.mb-preview span.on { opacity: 1; background: #7c5cff; color: #fff; border-radius: 3px; }
+
+/* ---- Character selector for "part of a text" ---- */
+.mb-range { padding: 10px 12px; color: #e9e4f7; font: 600 13px 'Segoe UI', system-ui, sans-serif; max-width: 420px; user-select: none; }
+.mb-range-title { margin-bottom: 8px; opacity: .8; font-weight: 500; }
+.mb-range-chars { display: flex; flex-wrap: wrap; gap: 2px; cursor: text; }
+.mb-range-chars span { min-width: 16px; padding: 4px 2px; text-align: center; font-size: 18px; border-radius: 4px; background: #2a2440; }
+.mb-range-chars span.space { background: #231e35; color: #8c80b8; }
+.mb-range-chars span.on { background: #7c5cff; color: #fff; }
+.mb-range-info { margin-top: 8px; font-weight: 500; opacity: .85; }
+.mb-range-all { margin-top: 8px; padding: 4px 10px; border-radius: 6px; border: 1px solid #4a3f78; background: #2a2440; color: #e9e4f7; cursor: pointer; }
+.mb-range-all:hover { background: #3a3160; }

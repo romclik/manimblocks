@@ -3,6 +3,7 @@ import * as Blockly from 'blockly';
 import { registerBlocks } from '../blocks/definitions';
 import { TOOLBOX } from '../blocks/toolbox';
 import { ensureStart, syncObjects, afterWorkspaceReplaced } from '../blocks/sync';
+import { setupHoverHighlight } from '../blocks/highlight';
 import type { WorkspaceState } from '../codegen/generate';
 
 const darkTheme = Blockly.Theme.defineTheme('manimDark', {
@@ -59,7 +60,12 @@ function setupPalette(ws: Blockly.WorkspaceSvg, host: HTMLElement, getAutoHide: 
   };
 
   // Clicking an already open category would normally close it; keep it open unless we are the ones closing it.
+  // Ovals already built into palette blocks take the color of the block they are in.
+  const recolourPalette = () => {
+    for (const b of flyout.getWorkspace().getBlocksByType('obj_ref', false) as (Blockly.Block & { recolour_?: () => void })[]) b.recolour_?.();
+  };
   const onSelect = (e: Blockly.Events.Abstract) => {
+    if (e.type === Blockly.Events.TOOLBOX_ITEM_SELECT) { recolourPalette(); setTimeout(recolourPalette, 0); }
     if (e.type !== Blockly.Events.TOOLBOX_ITEM_SELECT || closing) return;
     const ev = e as Blockly.Events.ToolboxItemSelect;
     if (ev.newItem || !ev.oldItem) return;
@@ -137,9 +143,10 @@ export function BlocklyEditor({ theme, autoHidePalette, onReady, onChange }: Pro
     wsRef.current = ws;
     afterWorkspaceReplaced(ws);
     paletteRef.current = setupPalette(ws, host.current!, () => autoRef.current);
+    const stopHover = setupHoverHighlight(ws, host.current!);
     onReady(ws);
     emit();
-    return () => { paletteRef.current?.dispose(); ro.disconnect(); ws.dispose(); };
+    return () => { stopHover(); paletteRef.current?.dispose(); ro.disconnect(); ws.dispose(); };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
   return <div ref={host} className="blockly-host" />;

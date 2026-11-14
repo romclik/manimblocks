@@ -3,7 +3,7 @@ type SaveResult = { ok: true; path: string } | { ok: false; canceled?: boolean; 
 interface Locations { root: string; pythonEnv: string; cache: string; temp: string }
 interface EnvStatus { ready: boolean; reason?: 'missing' | 'outdated' | 'damaged'; manim?: string; python?: string }
 type Quality = 'l' | 'm' | 'h';
-interface Prefs { theme: 'dark' | 'light'; previewQuality: Quality; renderQuality: Quality; fps: number; exportDir: string; paletteAutoHide: boolean; autoUpdate: boolean; remindUntil: number; remindVersion: string }
+interface Prefs { theme: 'dark' | 'light'; previewQuality: Quality; renderQuality: Quality; fps: number; exportDir: string; paletteAutoHide: boolean; autoUpdate: boolean; updatePrereleases: boolean; remindUntil: number; remindVersion: string }
 interface LatexStatus { available: boolean; source: 'managed' | 'system' | 'none'; path: string | null }
 interface SettingsInfo { configured: boolean; locations: Locations | null; defaults: Locations; uvFound: boolean; envStatus: EnvStatus; appVersion: string; prefs: Prefs; latex: LatexStatus }
 interface UpdateState { status: 'idle' | 'checking' | 'none' | 'available' | 'downloading' | 'downloaded' | 'error' | 'unsupported'; current: string; version?: string; notes?: string; url?: string; percent?: number; error?: string; checkedAt?: number }

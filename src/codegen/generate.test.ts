@@ -109,6 +109,10 @@ describe('automatic object names', () => {
     const d = listObjects(prog(seq(text('a', 'Hello'), circle('b')))).map((o) => o.description);
     expect(d).toEqual(['Text “Hello”, white', 'Circle, radius 1, blue']);
   });
+  it('works out the text of each text object, including text copied from another object', () => {
+    const s = prog(seq(text('a', 'abcdef'), B('obj_text', { COLOR: 'RED' }, { TEXT: O('a', [2, 4]) }, 'b'), B('obj_text', { COLOR: 'RED' }, { TEXT: O('b') }, 'c'), circle('d')));
+    expect(listObjects(s).map((o) => o.text)).toEqual(['abcdef', 'bcd', 'bcd', undefined]);
+  });
   it('names are always safe Python identifiers (no keywords, no capitals)', () => {
     for (const o of listObjects(FULL)) expect(o.name).toMatch(/^[a-z]+[0-9]+$/);
   });
@@ -149,20 +153,18 @@ describe('object ovals', () => {
     expect(generate(s([1, 5])).code).toContain('Indicate(text1[0:5])');
     expect(generate(s([7, 11])).code).toContain('Indicate(text1[6:11])');
     expect(generate(s([6, 6])).problems).toEqual([]); // just the space
-    const whole = prog(seq(text('t', 'Hello'), B('anim_indicate', {}, { OBJ: { block: { type: 'obj_ref', fields: { TARGET: 't', FROM: '2', TO: '3' } } } })));
+    const whole = prog(seq(text('t', 'Hello'), B('anim_indicate', {}, { OBJ: { block: { type: 'obj_ref', fields: { TARGET: 't', RANGE: '2-3' } } } })));
     expect(generate(whole).code).toContain('Indicate(text1)'); // "part" is not ticked, so the whole text is used
   });
-  it('blank from/to mean the start/end of the text', () => {
-    const s = prog(seq(text('t', 'Hello'), B('anim_indicate', {}, { OBJ: O('t', ['', '3']) }), B('anim_indicate', {}, { OBJ: O('t', ['4', '']) })));
-    const code = generate(s).code;
-    expect(code).toContain('Indicate(text1[0:3])');
-    expect(code).toContain('Indicate(text1[3:5])');
+  it('an empty part means the whole text', () => {
+    const s = prog(seq(text('t', 'Hello'), B('anim_indicate', {}, { OBJ: O('t', '') })));
+    expect(generate(s).code).toContain('Indicate(text1)'); // empty: no part ticked in effect
   });
   it('rejects bad character ranges', () => {
-    const s = (part: [string, string]) => prog(seq(text('t', 'Hello'), B('anim_indicate', {}, { OBJ: O('t', part) })));
-    for (const bad of [['0', '2'], ['3', '2'], ['1', '9'], ['x', '2'], ['1; import os', '2'], ['-1', '2'], ['1.5', '2']] as [string, string][]) {
+    const s = (part: string) => prog(seq(text('t', 'Hello'), B('anim_indicate', {}, { OBJ: O('t', part) })));
+    for (const bad of ['0-2', '3-2', '1-9', 'x', '1; import os', '-1-2', '1.5-2', '1-', '1']) {
       const r = generate(s(bad));
-      expect(r.errorCount, bad.join('-')).toBe(1);
+      expect(r.errorCount, bad).toBe(1);
       expect(r.code).not.toContain('import os');
     }
   });
@@ -270,13 +272,13 @@ describe('editor behaviour (headless Blockly)', () => {
     const refs = ws.getBlocksByType('obj_ref', true);
     const forText = refs.find((b) => b.getFieldValue('TARGET') === 't')!, forShape = refs.find((b) => b.getFieldValue('TARGET') === 'c')!;
     expect(forText.getField('PART')).toBeTruthy();
-    expect([forText.getFieldValue('FROM'), forText.getFieldValue('TO')]).toEqual(['2', '4']);
+    expect(forText.getFieldValue('RANGE')).toBe('2-4');
     expect(forShape.getField('PART')).toBeNull();
     const saved = Blockly.serialization.workspaces.save(ws) as WorkspaceState;
     expect(generate(saved).code).toContain('Indicate(text1[1:4])');
     // untick part: the characters are no longer used
     (forText.getField('PART') as Blockly.FieldCheckbox).setValue('FALSE');
-    expect(forText.getField('FROM')).toBeNull();
+    expect(forText.getField('RANGE')).toBeNull();
     expect(generate(Blockly.serialization.workspaces.save(ws) as WorkspaceState).code).toContain('Indicate(text1)');
     ws.dispose();
   });
@@ -285,10 +287,11 @@ describe('editor behaviour (headless Blockly)', () => {
     syncObjects(ws);
     const r = ws.getBlocksByType('obj_ref', true)[0];
     expect(r.getField('PART')).toBeTruthy();
-    expect(r.getField('FROM')).toBeNull();
+    expect(r.getField('RANGE')).toBeNull();
     (r.getField('PART') as Blockly.FieldCheckbox).setValue('TRUE');
-    expect(r.getField('FROM')).toBeTruthy();
-    expect(generate(Blockly.serialization.workspaces.save(ws) as WorkspaceState).code).toContain('Indicate(text1[0:3])');
+    expect(r.getField('RANGE')).toBeTruthy();
+    r.setFieldValue('2-4', 'RANGE');
+    expect(generate(Blockly.serialization.workspaces.save(ws) as WorkspaceState).code).toContain('Indicate(text1[1:4])');
     ws.dispose();
   });
   it('the start block is added automatically, cannot be deleted, and is never duplicated', () => {

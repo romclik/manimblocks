@@ -112,6 +112,25 @@ describe('updater safety rules', () => {
     expect(m.u.state().status).toBe('none');
     expect(isNewer('0.10.0', '0.9.9')).toBe(true); expect(isNewer('1.0.0', '1.0.0')).toBe(false); expect(isNewer('v0.1.1', '0.1.0')).toBe(true); expect(isNewer('0.1.0', '0.2.0')).toBe(false);
   });
+  it('pre-releases: off by default, switched on by the setting, ordered correctly', async () => {
+    const m = make();
+    await m.u.check();
+    expect(m.au.allowPrerelease).toBe(false);
+    m.prefs().updatePrereleases = true;
+    m.u.state(); await m.u.check({ manual: true });
+    expect(m.au.allowPrerelease).toBe(true);
+    m.prefs().updatePrereleases = false;
+    await m.u.check({ manual: true });
+    expect(m.au.allowPrerelease).toBe(false);
+    expect(isNewer('0.3.0-beta.1', '0.2.0')).toBe(true);
+    expect(isNewer('0.3.0', '0.3.0-beta.5')).toBe(true);
+    expect(isNewer('0.3.0-beta.5', '0.3.0')).toBe(false);
+    expect(isNewer('0.3.0-beta.2', '0.3.0-beta.1')).toBe(true);
+    expect(isNewer('0.3.0-beta.10', '0.3.0-beta.9')).toBe(true);
+    expect(isNewer('0.3.0-beta.1', '0.3.0-beta.1')).toBe(false);
+    expect(isNewer('0.3.0-rc.1', '0.3.0-beta.9')).toBe(true);
+    expect(isNewer('0.3.0-beta.1', '0.3.0-beta')).toBe(true);
+  });
   it('Remind me later silences automatic checks for a day but not manual ones', async () => {
     const m = make(); await m.u.check();
     m.u.remindLater();

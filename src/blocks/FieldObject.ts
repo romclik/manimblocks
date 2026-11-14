@@ -3,6 +3,7 @@
 // list shows a description of the object it stands for.
 import * as Blockly from 'blockly';
 import { findObject, getObjects, objectOptions, NO_OBJECTS_LABEL } from './registry';
+import { clearHighlight, highlightObject } from './highlight';
 
 export class FieldObject extends Blockly.FieldDropdown {
   constructor() { super(() => objectOptions()); }
@@ -32,5 +33,28 @@ export class FieldObject extends Blockly.FieldDropdown {
     };
     tag();
     setTimeout(tag, 0);
+    // Pointing at an entry lights up the block that creates that object. The listener sits on the outer
+    // drop-down container because the list inside it can be rebuilt after the editor opens.
+    const ws = this.getSourceBlock()?.workspace;
+    const outer = document.querySelector<HTMLElement>('.blocklyDropDownDiv');
+    if (!outer) return;
+    this.stopHover?.();
+    const light = (ev: Event) => {
+      const items = [...outer.querySelectorAll<HTMLElement>('[role="menuitem"], [role="option"], .blocklyMenuItem')];
+      const i = items.findIndex((el) => el.contains(ev.target as Node));
+      const o = getObjects()[i];
+      if (ws && o) highlightObject(ws, o.id); else clearHighlight();
+    };
+    outer.addEventListener('pointerover', light);
+    outer.addEventListener('pointerleave', clearHighlight);
+    this.stopHover = () => { outer.removeEventListener('pointerover', light); outer.removeEventListener('pointerleave', clearHighlight); this.stopHover = undefined; };
+  }
+
+  private stopHover?: () => void;
+
+  protected override dropdownDispose_(): void {
+    this.stopHover?.();
+    clearHighlight();
+    super.dropdownDispose_();
   }
 }

@@ -2,7 +2,7 @@
 
 Build [Manim](https://www.manim.community/) animations by snapping blocks together (like Scratch). ManimBlocks turns your blocks into real Manim Community Edition Python code.
 
-## Current status (version 0.2.0)
+## Current status (version 0.2.1)
 
 | Feature | Status |
 |---|---|
@@ -45,9 +45,9 @@ Other commands: `npm test` (tests), `npm run check` (type-check + tests + build,
 3. Click **Commit changes**. The **Actions** tab will start running **CI** automatically. A green check means the tests and build pass.
 
 ## Publish a release (installer)
-1. Check `version` in `package.json` (e.g. `0.2.0`).
-2. On GitHub: **Releases -> Draft a new release**. Create the tag `v0.2.0` (the letter `v` plus the same version). Write notes. Click **Publish release**.
-3. The **Release** workflow builds the installer (about 5 minutes) and attaches `ManimBlocks-Setup-0.2.0.exe` to that release. If the tag and `package.json` version differ, it stops with a clear message.
+1. Check `version` in `package.json` (e.g. `0.2.1`).
+2. On GitHub: **Releases -> Draft a new release**. Create the tag `v0.2.1` (the letter `v` plus the same version). Write notes. Click **Publish release**.
+3. The **Release** workflow builds the installer (about 5 minutes) and attaches `ManimBlocks-Setup-0.2.1.exe` to that release. If the tag and `package.json` version differ, it stops with a clear message.
 
 For the next version: raise `version` in `package.json`, commit, then repeat step 2 with the new tag.
 
@@ -71,9 +71,9 @@ MIT, see `LICENSE`.
 The app ships a small tool called [`uv`](https://github.com/astral-sh/uv) (downloaded by `npm install` with a pinned checksum, bundled into the installer). On first launch it uses `uv` to download Python 3.12 and install Manim 0.22.1 plus FFmpeg into the folders you chose. Renders run in a separate process, so the window stays responsive, and can be canceled. Before anything runs, a safety check (`electron/core/validate_scene.py`) verifies the generated program contains only the Manim operations ManimBlocks can produce.
 
 ## Automatic updates (how to publish and test them)
-The app checks GitHub Releases about 15 seconds after start and every 6 hours (switch off in Settings). When a newer version exists it shows a bar with **Download**, **Release notes** and **Remind me later**. Nothing is downloaded until you click Download, and nothing is installed until you click **Install and restart** and confirm. Downloads are verified with the SHA-512 checksum in `latest.yml`. Updates reinstall into the same folder you chose. (Releases are unsigned, so there is no publisher-signature check until you add a code-signing certificate.)
+The app checks GitHub Releases about 15 seconds after start and every 6 hours (switch off in Settings). When a newer version exists it shows a bar with **Download**, **Release notes** and **Remind me later**. Nothing is downloaded until you click Download, and nothing is installed until you click **Install and restart** and confirm. Downloads are verified with the SHA-512 checksum in `latest.yml`. Updates reinstall into the same folder you chose. By default only normal releases are offered; **Settings > Include pre-releases** also offers releases you tick "Set as a pre-release" on GitHub (use tags like `v0.3.0-beta.1`, with the same text in `package.json`). (Releases are unsigned, so there is no publisher-signature check until you add a code-signing certificate.)
 
-To test it: install `0.2.0` from a release, raise `version` in `package.json` to `0.2.1`, commit, publish a release with tag `v0.2.1`, wait for the Release workflow, then open the installed 0.2.0 app and use Settings > Check for updates.
+To test it: install `0.2.1` from a release, raise `version` in `package.json` to `0.2.2`, commit, publish a release with tag `v0.2.2`, wait for the Release workflow, then open the installed 0.2.1 app and use Settings > Check for updates.
 
 ## Test installers without publishing
 The **Build installer (test build)** workflow builds the installer on every push. Open the run in the Actions tab and download it under **Artifacts**.

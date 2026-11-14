@@ -1,7 +1,7 @@
 {
   "name": "manimblocks",
   "productName": "ManimBlocks",
-  "version": "0.2.0",
+  "version": "0.2.1",
   "description": "Visual block editor that generates Manim animations",
   "author": "romclik",
   "license": "MIT",

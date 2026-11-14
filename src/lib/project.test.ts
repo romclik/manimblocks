@@ -6,9 +6,18 @@ import { generate, type WorkspaceState } from '../codegen/generate';
 import { FULL } from '../codegen/fixtures';
 
 const known = new Set(BLOCK_DEFINITIONS.map((b) => b.type));
-const wrap = (workspace: unknown, extra: object = {}) => JSON.stringify({ format: PROJECT_FORMAT, version: 2, workspace, ...extra });
+const wrap = (workspace: unknown, extra: object = {}) => JSON.stringify({ format: PROJECT_FORMAT, version: 3, workspace, ...extra });
 
 describe('project files', () => {
+  it('upgrades a format 2 project: two character fields become one range', () => {
+    const v2 = { blocks: { blocks: [{ type: 'scene_start', next: { block: { type: 'anim_indicate', inputs: { OBJ: { shadow: { type: 'obj_ref', fields: { TARGET: 'x', FROM: '2', TO: '4' }, extraState: { part: true } } } } } } }] } };
+    const r = parseProject(wrap(v2, { version: 2 }), known) as { ok: boolean; workspace: any };
+    expect(r.ok).toBe(true);
+    const ref = r.workspace.blocks.blocks[0].next.block.inputs.OBJ.shadow;
+    expect(ref.fields).toEqual({ TARGET: 'x', RANGE: '2-4' });
+    const blank = { blocks: { blocks: [{ type: 'obj_ref', fields: { TARGET: 'x', FROM: '', TO: '3' } }] } };
+    expect((parseProject(wrap(blank, { version: 2 }), known) as any).workspace.blocks.blocks[0].fields.RANGE).toBe('');
+  });
   it('round-trips a full project through real Blockly and regenerates identical code', () => {
     registerBlocks();
     const ws1 = new Blockly.Workspace();
@@ -32,7 +41,7 @@ describe('project files', () => {
     ['null', 'null', /not a ManimBlocks/],
     ['newer version', wrap({}, { version: 99 }), /newer version/],
     ['bad version', wrap({}, { version: 'x' }), /version number/],
-    ['no workspace', JSON.stringify({ format: PROJECT_FORMAT, version: 2 }), /workspace is missing/],
+    ['no workspace', JSON.stringify({ format: PROJECT_FORMAT, version: 3 }), /workspace is missing/],
     ['blocks not a list', wrap({ blocks: { blocks: 5 } }), /block list/],
     ['block without type', wrap({ blocks: { blocks: [{ id: 'x' }] } }), /no type/],
     ['unknown block', wrap({ blocks: { blocks: [{ type: 'evil_block' }] } }), /does not know \(evil_block\)/],

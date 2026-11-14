@@ -1,6 +1,7 @@
 import * as Blockly from 'blockly';
 import { COLORS } from './colors';
 import { FieldObject } from './FieldObject';
+import { FieldTextRange } from './FieldTextRange';
 import { findObject } from './registry';
 
 export const CATEGORY_COLOURS = {
@@ -46,7 +47,7 @@ export const BLOCK_DEFINITIONS = [
   // ---- Object references (round ovals)
   { type: 'obj_ref', message0: '%1 %2', args0: [{ type: 'field_manim_object', name: 'TARGET' }, { type: 'input_dummy', name: 'MAIN' }], output: 'Object', colour: CATEGORY_COLOURS.objects, inputsInline: true,
     mutator: 'manim_obj_ref',
-    tooltip: 'Pick an object. For a text object, tick "part" to use only some of its characters (for example 1 to 5).' },
+    tooltip: 'Pick an object. For a text object, tick "part" and drag across its characters to use only those.' },
   { type: 'obj_textval', message0: '%1', args0: [text('TEXT', 'Hello Manim')], output: 'String', outputShape: 3, colour: CATEGORY_COLOURS.objects,
     tooltip: 'Type some text here.' },
 
@@ -102,14 +103,21 @@ export const BLOCK_DEFINITIONS = [
 ];
 
 // The object oval: a dropdown of objects plus, for text objects, an optional "part" (characters from-to).
-interface RefBlock extends Blockly.Block { part_: boolean; textual_: boolean; updateShape_(): void }
+interface RefBlock extends Blockly.Block { part_: boolean; textual_: boolean; updateShape_(): void; recolour_(): void }
 const REF_MIXIN = {
   part_: false,
   textual_: false,
   saveExtraState(this: RefBlock) { return this.part_ ? { part: true } : null; },
   loadExtraState(this: RefBlock, state: { part?: boolean } | null) { this.part_ = !!state?.part; this.updateShape_(); },
+  /** An oval that is already built into a block takes that block's color; one dragged out of the palette keeps the object color. */
+  recolour_(this: RefBlock) {
+    const parent = this.getParent();
+    const colour = this.isShadow() && parent ? parent.getColour() : CATEGORY_COLOURS.objects;
+    if (this.getColour() !== colour) this.setColour(colour);
+  },
   /** Shows or hides the "part" controls. Called when the object list changes or the choice changes. */
   sync(this: RefBlock) {
+    this.recolour_();
     const f = this.getField('TARGET') as FieldObject | null;
     const info = findObject(String(f?.getValue() ?? ''));
     this.textual_ = !!info?.textual;
@@ -122,21 +130,15 @@ const REF_MIXIN = {
     const has = (n: string) => input.fieldRow.some((f) => f.name === n);
     const want = this.textual_ || this.part_;
     if (!want) {
-      for (const n of ['PART', 'L_PART', 'L_CHARS', 'FROM', 'L_TO', 'TO']) if (has(n)) input.removeField(n, true);
+      for (const n of ['PART', 'L_PART', 'RANGE']) if (has(n)) input.removeField(n, true);
       return;
     }
     if (!has('PART')) {
       input.appendField(new Blockly.FieldCheckbox(this.part_ ? 'TRUE' : 'FALSE', (v) => { this.part_ = v === true || v === 'TRUE'; this.updateShape_(); return v; }), 'PART');
       input.appendField(new Blockly.FieldLabel('part'), 'L_PART');
     }
-    if (this.part_ && !has('FROM')) {
-      input.appendField(new Blockly.FieldLabel('characters'), 'L_CHARS');
-      input.appendField(new Blockly.FieldTextInput('1'), 'FROM');
-      input.appendField(new Blockly.FieldLabel('to'), 'L_TO');
-      input.appendField(new Blockly.FieldTextInput('3'), 'TO');
-    } else if (!this.part_ && has('FROM')) {
-      for (const n of ['L_CHARS', 'FROM', 'L_TO', 'TO']) if (has(n)) input.removeField(n, true);
-    }
+    if (this.part_ && !has('RANGE')) input.appendField(new FieldTextRange() as never, 'RANGE');
+    else if (!this.part_ && has('RANGE')) input.removeField('RANGE', true);
   },
 };
 
@@ -145,6 +147,7 @@ export function registerBlocks(): void {
   if (registered) return;
   registered = true;
   Blockly.fieldRegistry.register('field_manim_object', FieldObject as unknown as Blockly.fieldRegistry.RegistrableField);
+  Blockly.fieldRegistry.register('field_manim_range', FieldTextRange as unknown as Blockly.fieldRegistry.RegistrableField);
   Blockly.Extensions.registerMutator('manim_obj_ref', REF_MIXIN);
   Blockly.common.defineBlocksWithJsonArray(BLOCK_DEFINITIONS as unknown as object[]);
 }

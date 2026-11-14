@@ -3,7 +3,7 @@
 // Security: users never type Python. Every value is validated (numbers/formulas, whitelisted
 // colors, escaped strings, sanitized identifiers) before it can reach the generated code.
 import { COLOR_VALUES } from '../blocks/colors';
-import { listObjects, inputBlock, type ObjectInfo } from '../blocks/objects';
+import { listObjects, inputBlock, readRange, type ObjectInfo } from '../blocks/objects';
 
 export interface BlockState {
   type: string; id?: string;
@@ -55,17 +55,9 @@ class Ctx {
     if (!part) return { info, code: info.name, text: info.textual ? whole : undefined };
     if (whole === undefined) return null; // the text itself had a problem, already reported
     const chars = Array.from(whole);
-    const read = (name: string, def: number, what: string): number | null => {
-      const raw = String(r.fields?.[name] ?? '').trim();
-      if (raw === '') return def;
-      if (!/^\d{1,6}$/.test(raw)) { this.err(`${what} must be a whole number (you typed "${raw}").`, b); return null; }
-      return Number(raw);
-    };
-    const from = read('FROM', 1, 'The first character'), to = read('TO', chars.length, 'The last character');
-    if (from === null || to === null) return null;
-    if (from < 1 || to > chars.length || from > to) {
-      this.err(`Choose characters from 1 to ${chars.length} of "${info.name}", with the first number not larger than the last.`, b); return null;
-    }
+    const range = readRange(r.fields?.RANGE, chars.length);
+    if ('error' in range) { this.err(`${range.error} (${info.name})`, b); return null; }
+    const { from, to } = range;
     // Text objects are made with ligatures off, so piece number n is exactly character n+1 (spaces included).
     return { info, code: `${info.name}[${from - 1}:${to}]`, text: chars.slice(from - 1, to).join('') };
   }
